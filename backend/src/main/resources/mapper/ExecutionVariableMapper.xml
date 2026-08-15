@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agentflow.mapper.ExecutionVariableMapper">
+    
+    <resultMap id="BaseResultMap" type="com.agentflow.entity.ExecutionVariable">
+        <id column="id" property="id"/>
+        <result column="execution_id" property="executionId"/>
+        <result column="variable_name" property="variableName"/>
+        <result column="variable_type" property="variableType"/>
+        <result column="variable_value" property="variableValue"/>
+        <result column="is_modified" property="isModified"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+    
+    <sql id="Base_Column_List">
+        id, execution_id, variable_name, variable_type, variable_value, is_modified, created_at, updated_at
+    </sql>
+    
+    <select id="selectByExecutionId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM execution_variable
+        WHERE execution_id = #{executionId}
+        ORDER BY variable_name ASC
+    </select>
+    
+    <select id="selectByExecutionIdAndVariableName" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM execution_variable
+        WHERE execution_id = #{executionId} AND variable_name = #{variableName}
+        LIMIT 1
+    </select>
+    
+    <delete id="deleteByExecutionId">
+        DELETE FROM execution_variable
+        WHERE execution_id = #{executionId}
+    </delete>
+    
+</mapper>

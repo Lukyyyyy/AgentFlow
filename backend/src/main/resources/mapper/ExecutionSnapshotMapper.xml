@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.agentflow.mapper.ExecutionSnapshotMapper">
+    
+    <resultMap id="BaseResultMap" type="com.agentflow.entity.ExecutionSnapshot">
+        <id column="id" property="id"/>
+        <result column="execution_id" property="executionId"/>
+        <result column="flow_id" property="flowId"/>
+        <result column="node_id" property="nodeId"/>
+        <result column="node_type" property="nodeType"/>
+        <result column="node_name" property="nodeName"/>
+        <result column="status" property="status"/>
+        <result column="input_data" property="inputData"/>
+        <result column="output_data" property="outputData"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="completed_at" property="completedAt"/>
+        <result column="duration" property="duration"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="execution_order" property="executionOrder"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+    
+    <sql id="Base_Column_List">
+        id, execution_id, flow_id, node_id, node_type, node_name, status, input_data, output_data,
+        error_message, started_at, completed_at, duration, retry_count, execution_order, created_at, updated_at
+    </sql>
+    
+    <select id="selectByExecutionId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM execution_snapshot
+        WHERE execution_id = #{executionId}
+        ORDER BY execution_order ASC
+    </select>
+    
+    <select id="selectByExecutionIdAndNodeId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM execution_snapshot
+        WHERE execution_id = #{executionId} AND node_id = #{nodeId}
+        LIMIT 1
+    </select>
+    
+    <delete id="deleteByExecutionId">
+        DELETE FROM execution_snapshot
+        WHERE execution_id = #{executionId}
+    </delete>
+    
+</mapper>

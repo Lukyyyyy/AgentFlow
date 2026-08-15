@@ -1,0 +1,38 @@
+# Local environment and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Dependencies and build output
+node_modules/
+target/
+dist/
+build/
+*.class
+
+# IDE, OS, and local agent metadata
+.DS_Store
+.idea/
+.vscode/
+.qoder/
+.feisuan/
+AGENTS.md
+
+# Legacy exports and local scratch files
+BOOT-INF/
+image/
+show
+backend/list
+backend/show
+test_llm_config.py
+
+# Internal progress notes that are not part of the public project documentation
+docs/FINAL_SUMMARY.md
+docs/PROGRESS.md
+docs/PROJECT_COMPLETION_REPORT.md
+docs/PROJECT_STATUS.md
+docs/SUMMARY.md
+docs/mermaid.md
+docs/react-agent-phases.md
+docs/resume.md
