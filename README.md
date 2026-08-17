@@ -7,9 +7,11 @@
 
 ---
 
-AgentFlow 是一个面向开发者和 AI 应用团队的工作流编排平台。它用可视化画布描述处理过程，用 DAG 或 LangGraph4j 执行节点，并把模型调用、工具使用、知识检索和执行日志放在同一个工作空间中。
+AgentFlow 是一个面向开发者和 AI 应用团队的可视化 AI 工作流编排平台。它通过 DAG 与 LangGraph4j 双执行引擎连接大模型、Agent、知识库和工具，并提供从流程设计、配置管理到实时调试的统一工作空间。
 
-![AgentFlow 工作流编辑器](design/agentflow-editor-concept.png)
+![AgentFlow 工作流编辑器最新界面](design/agentflow-editor.png)
+
+> 当前界面：在同一画布中编排用户输入、ReAct Agent、知识库检索、联网搜索与结构化输出，并在右侧配置所选节点。
 
 ## 核心能力
 
@@ -57,7 +59,7 @@ flowchart LR
 
 - JDK 21
 - Node.js 18+ 与 npm 9+
-- Maven 3.8+ 或项目 Maven Wrapper
+- Maven 3.8+
 - MySQL 8.0+
 - Redis（使用记忆与执行状态能力时需要）
 - MinIO（使用图片、视频等对象存储能力时需要）
@@ -93,7 +95,7 @@ chmod +x start.sh
 ./start.sh
 ```
 
-脚本会在配置文件缺失时从示例创建本地配置、首次启动时安装前端依赖，并同时启动前后端服务。按 `Ctrl+C` 可一起停止两个服务。如果后端目录没有 Maven Wrapper，脚本会使用系统 Maven。
+脚本会在配置文件缺失时从示例创建本地配置、首次启动时安装前端依赖，并同时启动前后端服务。按 `Ctrl+C` 可一起停止两个服务。后端使用系统 Maven 启动。
 
 启动后访问：
 
@@ -106,7 +108,7 @@ chmod +x start.sh
 
 ```bash
 cd backend
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 ```bash
@@ -141,7 +143,7 @@ AgentFlow/
 │       ├── store/            # Zustand 状态
 │       └── api/              # HTTP API 客户端
 ├── docs/                     # 使用、架构和项目文档
-├── design/                   # 设计概念与品牌参考
+├── design/                   # README 使用的当前界面截图
 └── start.sh                  # 本地一键启动脚本
 ```
 
@@ -149,8 +151,8 @@ AgentFlow/
 
 ```bash
 cd backend
-./mvnw test
-./mvnw clean package
+mvn test
+mvn clean package
 ```
 
 ```bash
