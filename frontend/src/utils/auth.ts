@@ -3,7 +3,7 @@ import { buildBackendUrl } from '../config/api';
 
 const ACCESS_TOKEN_KEY = 'token';
 const REFRESH_TOKEN_KEY = 'refreshToken';
-const USERNAME_KEY = 'username';
+const USER_EMAIL_KEY = 'userEmail';
 const REFRESH_ENDPOINT = buildBackendUrl('/api/auth/refresh');
 
 let refreshPromise: Promise<string | null> | null = null;
@@ -16,6 +16,7 @@ interface RefreshResult {
     refreshToken: string;
     user: {
       username: string;
+      email: string;
     };
   };
 }
@@ -39,18 +40,26 @@ export const getAccessToken = () => localStorage.getItem(ACCESS_TOKEN_KEY);
 
 export const getRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
 
-export const getUsername = () => localStorage.getItem(USERNAME_KEY);
+export const getUserEmail = () => {
+  const email = localStorage.getItem(USER_EMAIL_KEY);
+  if (email) {
+    return email;
+  }
+  // 旧版本登录态以 username 键存储用户名，登录仅支持邮箱后清理遗留键
+  localStorage.removeItem('username');
+  return null;
+};
 
-export const setStoredAuth = (token: string, refreshToken: string, username: string) => {
+export const setStoredAuth = (token: string, refreshToken: string, email: string) => {
   localStorage.setItem(ACCESS_TOKEN_KEY, token);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  localStorage.setItem(USERNAME_KEY, username);
+  localStorage.setItem(USER_EMAIL_KEY, email);
 };
 
 export const clearStoredAuth = () => {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USERNAME_KEY);
+  localStorage.removeItem(USER_EMAIL_KEY);
 };
 
 export const isTokenExpiringSoon = (token: string, bufferSeconds = 30) => {
@@ -80,7 +89,7 @@ export const refreshAccessToken = async () => {
           return null;
         }
 
-        setStoredAuth(result.data.token, result.data.refreshToken, result.data.user.username);
+        setStoredAuth(result.data.token, result.data.refreshToken, result.data.user.email);
         return result.data.token;
       })
       .catch(() => {

@@ -97,17 +97,31 @@ select {
 .workflow-user {
   gap: 6px;
   margin-left: 6px;
-  padding: 4px 5px 4px 10px;
+  padding: 4px 5px 4px 6px;
   border: 1px solid #e1e7f0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: #f8fafc;
 }
 
-.workflow-user-name {
-  max-width: 110px;
-  overflow: hidden;
-  color: #475569;
+.workflow-user-avatar {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
   font-size: 13px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4f6bed, #7b5cf0);
+}
+
+.workflow-user-name {
+  max-width: 240px;
+  overflow: hidden;
+  color: #3d4c63;
+  font-size: 13px;
+  font-weight: 560;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Button, Input, Form, message, Checkbox, Select, Modal, List, Popconfirm } from 'antd';
+import { Button, Input, Form, message, Checkbox, Select, Modal, List, Popconfirm, Tooltip } from 'antd';
 import { SaveOutlined, FolderOpenOutlined, BugOutlined, LogoutOutlined, PlusOutlined, DeleteOutlined, DatabaseOutlined, ApiOutlined, EditOutlined } from '@ant-design/icons';
 import { Edge, MarkerType, Node } from '@xyflow/react';
 import NodePanel from '../components/NodePanel';
@@ -117,7 +117,7 @@ const enrichKnowledgeBaseNames = (nodes: Node[], knowledgeBases: KnowledgeBase[]
 const EditorPage = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { username, clearAuth } = useAuthStore();
+  const { email, clearAuth } = useAuthStore();
   const { nodes, edges, currentWorkflowId, setCurrentWorkflowId, selectedNode, setNodes, setEdges } = useWorkflowStore();
   const [workflowName, setWorkflowName] = useState('未命名工作流');
   const [engineType, setEngineType] = useState('dag');
@@ -1362,16 +1362,20 @@ const EditorPage = () => {
             调试运行
           </Button>
           <span className="workflow-toolbar-separator" aria-hidden="true" />
-          <div className="workflow-user">
-            <span className="workflow-user-name">{username}</span>
-            <Button
-              icon={<LogoutOutlined />}
-              onClick={handleLogout}
-              type="text"
-              size="small"
-            >
-              登出
-            </Button>
+          <div className="workflow-user" title={email || undefined}>
+            <span className="workflow-user-avatar" aria-hidden="true">
+              {(email?.[0] || 'U').toUpperCase()}
+            </span>
+            <span className="workflow-user-name">{email}</span>
+            <Tooltip title="退出登录">
+              <Button
+                icon={<LogoutOutlined />}
+                onClick={handleLogout}
+                type="text"
+                size="small"
+                aria-label="退出登录"
+              />
+            </Tooltip>
           </div>
         </div>
       </header>

@@ -1,7 +1,7 @@
 import api from '../utils/request';
 
 export interface LoginRequest {
-  username: string;
+  email: string;
   password: string;
 }
 
@@ -10,11 +10,22 @@ export interface LoginResponse {
   refreshToken: string;
   user: {
     username: string;
+    email: string;
   };
 }
 
 export interface RefreshTokenRequest {
   refreshToken: string;
+}
+
+export interface RegistrationCodeRequest {
+  email: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  verificationCode: string;
+  password: string;
 }
 
 export interface ApiResult<T> {
@@ -28,6 +39,20 @@ export interface ApiResult<T> {
  */
 export const login = (data: LoginRequest): Promise<ApiResult<LoginResponse>> => {
   return api.post('/api/auth/login', data);
+};
+
+/**
+ * 发送注册验证码
+ */
+export const sendRegistrationCode = (data: RegistrationCodeRequest): Promise<ApiResult<void>> => {
+  return api.post('/api/auth/registration-code', data);
+};
+
+/**
+ * 邮箱注册（成功后自动登录）
+ */
+export const register = (data: RegisterRequest): Promise<ApiResult<LoginResponse>> => {
+  return api.post('/api/auth/register', data);
 };
 
 /**
