@@ -262,17 +262,17 @@ CREATE TABLE IF NOT EXISTS knowledge_chunk (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识库片段表';
 
 CREATE TABLE IF NOT EXISTS knowledge_index_task (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '索引任务 ID',
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '索引任务主键 ID',
     knowledge_base_id BIGINT NOT NULL COMMENT '知识库 ID',
-    document_id BIGINT NOT NULL COMMENT '文档 ID',
-    status VARCHAR(30) DEFAULT 'RUNNING' COMMENT '状态',
+    document_id BIGINT DEFAULT NULL COMMENT '知识文档 ID',
+    status VARCHAR(30) DEFAULT 'RUNNING' COMMENT '任务状态',
     progress INT DEFAULT 0 COMMENT '进度',
     total_chunks INT DEFAULT 0 COMMENT '总分片数',
     finished_chunks INT DEFAULT 0 COMMENT '完成分片数',
     error_message TEXT COMMENT '错误信息',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识(0-未删除,1-已删除)',
     INDEX idx_knowledge_index_task_base (knowledge_base_id),
     INDEX idx_knowledge_index_task_document (document_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识库索引任务表';
