@@ -34,7 +34,7 @@ class MailServiceTest {
         MailService service = new MailService(mailSenderProvider, objectMapper,
                 "", "", "tencent-ses",
                 "AKIDtest", "secret-key", "ap-hongkong",
-                "AI工作流 <agentflow-noreply@mail.lukybetter.com>", 213714);
+                "AgentFlow <no-reply@example.com>", 213714);
         assertTrue(service.isConfigured());
     }
 
@@ -43,7 +43,7 @@ class MailServiceTest {
         MailService service = new MailService(mailSenderProvider, objectMapper,
                 "smtp.qcloudmail.com", "", "tencent-ses",
                 "AKIDtest", "secret-key", "ap-hongkong",
-                "AI工作流 <agentflow-noreply@mail.lukybetter.com>", 0);
+                "AgentFlow <no-reply@example.com>", 0);
         assertFalse(service.isConfigured());
     }
 
@@ -52,7 +52,7 @@ class MailServiceTest {
         MailService service = new MailService(mailSenderProvider, objectMapper,
                 "smtp.qcloudmail.com", "", "Tencent-Ses",
                 "", "", "ap-hongkong",
-                "AI工作流 <agentflow-noreply@mail.lukybetter.com>", 213714);
+                "AgentFlow <no-reply@example.com>", 213714);
         assertFalse(service.isConfigured());
     }
 }

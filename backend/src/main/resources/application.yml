@@ -95,7 +95,7 @@ agentflow:
   # 登录仅支持邮箱，默认账户使用 default-email 匹配；留空则禁用默认账户，必须通过注册功能创建账户
   default-username: ${APP_AUTH_DEFAULT_USERNAME:admin}
   default-password: ${APP_AUTH_DEFAULT_PASSWORD:admin123}
-  default-email: ${APP_AUTH_DEFAULT_EMAIL:765754281@qq.com}
+  default-email: ${APP_AUTH_DEFAULT_EMAIL:admin@example.com}
   mail:
     # 发送通道: smtp(默认) | tencent-ses
     provider: ${MAIL_PROVIDER:smtp}
@@ -106,7 +106,7 @@ agentflow:
       secret-id: ${TENCENT_SES_SECRET_ID:}
       secret-key: ${TENCENT_SES_SECRET_KEY:}
       region: ${TENCENT_SES_REGION:ap-hongkong}
-      # 发信地址，支持别名格式：AI工作流 <agentflow-noreply@mail.lukybetter.com>
+      # 发信地址，支持别名格式：AgentFlow <no-reply@example.com>
       from-address: ${TENCENT_SES_FROM_ADDRESS:}
       # 已审核通过的验证码模板 ID（发信模板列表中查看）
       verification-template-id: ${TENCENT_SES_VERIFICATION_TEMPLATE_ID:0}
