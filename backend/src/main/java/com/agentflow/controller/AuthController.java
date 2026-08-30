@@ -1,10 +1,15 @@
 package com.agentflow.controller;
 
+import com.agentflow.common.BizException;
 import com.agentflow.common.Result;
 import com.agentflow.dto.LoginRequest;
 import com.agentflow.dto.LoginResponse;
 import com.agentflow.dto.RefreshTokenRequest;
+import com.agentflow.dto.RegisterRequest;
+import com.agentflow.dto.RegistrationCodeRequest;
 import com.agentflow.service.AuthService;
+import com.agentflow.service.EmailVerificationService;
+import com.agentflow.service.RegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,8 +27,14 @@ public class AuthController {
     
     @Autowired
     private AuthService authService;
-    
-    @Operation(summary = "用户登录")
+
+    @Autowired
+    private EmailVerificationService emailVerificationService;
+
+    @Autowired
+    private RegistrationService registrationService;
+
+    @Operation(summary = "用户登录（仅支持邮箱）")
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthService.AuthTokens tokens = authService.login(request.getEmail(), request.getPassword());
@@ -33,6 +44,31 @@ public class AuthController {
             return Result.success(response);
         }
         return Result.error("邮箱或密码错误");
+    }
+
+    @Operation(summary = "发送注册验证码")
+    @PostMapping("/registration-code")
+    public Result<Void> sendRegistrationCode(@Valid @RequestBody RegistrationCodeRequest request) {
+        try {
+            emailVerificationService.sendRegistrationCode(request.getEmail());
+            return Result.success();
+        } catch (BizException e) {
+            return Result.error(e.getCode(), e.getMessage());
+        }
+    }
+
+    @Operation(summary = "邮箱注册（成功后自动登录）")
+    @PostMapping("/register")
+    public Result<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
+        try {
+            String username = registrationService.register(
+                    request.getEmail(), request.getVerificationCode(), request.getPassword());
+            AuthService.AuthTokens tokens = authService.issueTokens(username);
+            LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(username, tokens.email());
+            return Result.success(new LoginResponse(tokens.accessToken(), tokens.refreshToken(), userInfo));
+        } catch (BizException e) {
+            return Result.error(e.getCode(), e.getMessage());
+        }
     }
     
     @Operation(summary = "用户登出")
