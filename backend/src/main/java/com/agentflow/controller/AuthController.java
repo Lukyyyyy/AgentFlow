@@ -26,13 +26,13 @@ public class AuthController {
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        AuthService.AuthTokens tokens = authService.login(request.getUsername(), request.getPassword());
+        AuthService.AuthTokens tokens = authService.login(request.getEmail(), request.getPassword());
         if (tokens != null) {
-            LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(request.getUsername());
+            LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.username(), tokens.email());
             LoginResponse response = new LoginResponse(tokens.accessToken(), tokens.refreshToken(), userInfo);
             return Result.success(response);
         }
-        return Result.error("用户名或密码错误");
+        return Result.error("邮箱或密码错误");
     }
     
     @Operation(summary = "用户登出")
@@ -54,7 +54,7 @@ public class AuthController {
             return Result.unauthorized("Refresh Token 无效或已过期");
         }
 
-        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.username());
+        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.username(), tokens.email());
         return Result.success(new LoginResponse(tokens.accessToken(), tokens.refreshToken(), userInfo));
     }
     
@@ -66,7 +66,7 @@ public class AuthController {
             token = token.substring(7);
             String username = authService.getUsernameByToken(token);
             if (username != null) {
-                return Result.success(new LoginResponse.UserInfo(username));
+                return Result.success(new LoginResponse.UserInfo(username, authService.getEmailByUsername(username)));
             }
         }
         return Result.unauthorized("未认证");

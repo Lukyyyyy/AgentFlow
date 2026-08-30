@@ -1,6 +1,10 @@
 package com.agentflow.service;
 
+import com.agentflow.common.PasswordUtil;
 import com.agentflow.config.JwtSecretProvider;
+import com.agentflow.entity.User;
+import com.agentflow.mapper.UserMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.JwtException;
@@ -16,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -36,6 +41,12 @@ public class AuthService {
     @Value("${agentflow.default-password:}")
     private String defaultPassword;
 
+    /**
+     * 默认账户邮箱（默认账户仅支持邮箱登录）
+     */
+    @Value("${agentflow.default-email:}")
+    private String defaultEmail;
+
     private static final String ACCESS_TOKEN_TYPE = "access";
     private static final String REFRESH_TOKEN_PREFIX = "auth:refresh:";
 
@@ -50,19 +61,47 @@ public class AuthService {
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
-    
+
+    @Autowired(required = false)
+    private UserMapper userMapper;
+
     /**
-     * 用户登录
+     * 用户登录（仅支持邮箱）
      */
-    public AuthTokens login(String username, String password) {
-        // 检查是否配置了默认账户
-        if (defaultUsername != null && !defaultUsername.isEmpty()
-            && defaultPassword != null && !defaultPassword.isEmpty()) {
-            if (defaultUsername.equals(username) && defaultPassword.equals(password)) {
-                return issueTokens(username);
+    public AuthTokens login(String email, String password) {
+        String normalizedEmail = normalizeEmail(email);
+        User user = findUserByEmail(normalizedEmail);
+        if (user != null) {
+            if (PasswordUtil.matches(password, user.getPasswordHash())) {
+                return issueTokens(user.getUsername());
             }
+            return null;
+        }
+        // 数据库未命中时，回退到环境变量配置的默认账户（仅匹配邮箱）
+        if (matchesDefaultAccount(normalizedEmail, password)) {
+            return issueTokens(defaultUsername);
         }
         return null;
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean matchesDefaultAccount(String normalizedEmail, String password) {
+        String configuredEmail = normalizeEmail(defaultEmail);
+        return !configuredEmail.isEmpty()
+                && configuredEmail.equals(normalizedEmail)
+                && defaultPassword != null && !defaultPassword.isEmpty()
+                && defaultPassword.equals(password);
+    }
+
+    private User findUserByEmail(String normalizedEmail) {
+        if (userMapper == null || normalizedEmail.isEmpty()) {
+            return null;
+        }
+        return userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getEmail, normalizedEmail));
     }
 
     public AuthTokens refresh(String refreshToken) {
@@ -115,7 +154,10 @@ public class AuthService {
         stringRedisTemplate.delete(buildRefreshTokenKey(refreshToken));
     }
 
-    private AuthTokens issueTokens(String username) {
+    /**
+     * 为指定用户签发访问/刷新令牌（注册成功后自动登录复用）
+     */
+    public AuthTokens issueTokens(String username) {
         String accessToken = createAccessToken(username);
         String refreshToken = createRefreshToken();
 
@@ -125,7 +167,29 @@ public class AuthService {
                 Duration.ofHours(refreshTokenExpirationHours)
         );
 
-        return new AuthTokens(accessToken, refreshToken, username);
+        return new AuthTokens(accessToken, refreshToken, username, getEmailByUsername(username));
+    }
+
+    /**
+     * 根据用户名解析邮箱（默认账户使用配置邮箱，数据库用户查表，兜底返回用户名）
+     */
+    public String getEmailByUsername(String username) {
+        if (username == null) {
+            return null;
+        }
+        if (defaultUsername != null && !defaultUsername.isEmpty() && defaultUsername.equals(username)) {
+            String configuredEmail = normalizeEmail(defaultEmail);
+            if (!configuredEmail.isEmpty()) {
+                return configuredEmail;
+            }
+        }
+        if (userMapper != null) {
+            User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
+            if (user != null && user.getEmail() != null && !user.getEmail().isEmpty()) {
+                return user.getEmail();
+            }
+        }
+        return username;
     }
 
     private String createAccessToken(String username) {
@@ -168,6 +232,6 @@ public class AuthService {
         return Keys.hmacShaKeyFor(jwtSecretProvider.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
-    public record AuthTokens(String accessToken, String refreshToken, String username) {
+    public record AuthTokens(String accessToken, String refreshToken, String username, String email) {
     }
 }

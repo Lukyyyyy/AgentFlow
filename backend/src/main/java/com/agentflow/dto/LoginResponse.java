@@ -29,5 +29,10 @@ public class LoginResponse {
     @AllArgsConstructor
     public static class UserInfo {
         private String username;
+
+        /**
+         * 邮箱（前端展示用）
+         */
+        private String email;
     }
 }

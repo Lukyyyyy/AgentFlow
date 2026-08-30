@@ -23,6 +23,19 @@ public class SchemaMigrationRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        createTableIfMissing("user", """
+                CREATE TABLE user (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '用户主键 ID',
+                    username VARCHAR(64) NOT NULL COMMENT '用户名(唯一,注册时自动生成)',
+                    email VARCHAR(320) NOT NULL COMMENT '邮箱(唯一,小写存储)',
+                    password_hash VARCHAR(100) NOT NULL COMMENT '密码哈希(BCrypt)',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识',
+                    UNIQUE KEY uk_user_username (username),
+                    UNIQUE KEY uk_user_email (email)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表'
+                """);
         createTableIfMissing("knowledge_base", """
                 CREATE TABLE knowledge_base (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '知识库 ID',
