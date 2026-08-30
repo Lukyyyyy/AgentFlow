@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Collapse, Input, Tag, message } from 'antd';
+import { Collapse, Input, message } from 'antd';
 import { HolderOutlined, SearchOutlined } from '@ant-design/icons';
 import { getNodeTypes, NodeDefinition } from '../api/workflow';
 
@@ -82,7 +82,7 @@ const NodePanel = ({ onDragStart }: NodePanelProps) => {
       label: (
         <div className="node-library-section-title">
           <span>大模型节点</span>
-          <Tag color="blue">{llmNodes.length}</Tag>
+          <span className="node-library-count">{llmNodes.length}</span>
         </div>
       ),
       children: (
@@ -100,7 +100,7 @@ const NodePanel = ({ onDragStart }: NodePanelProps) => {
       label: (
         <div className="node-library-section-title">
           <span>工具节点</span>
-          <Tag color="gold">{toolNodes.length}</Tag>
+          <span className="node-library-count">{toolNodes.length}</span>
         </div>
       ),
       children: (
@@ -120,7 +120,7 @@ const NodePanel = ({ onDragStart }: NodePanelProps) => {
             label: (
               <div className="node-library-section-title">
                 <span>控制节点</span>
-                <Tag color="purple">{controlNodes.length}</Tag>
+                <span className="node-library-count">{controlNodes.length}</span>
               </div>
             ),
             children: (
