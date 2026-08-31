@@ -16,6 +16,8 @@ public class Workflow {
      */
     @TableId(type = IdType.AUTO)
     private Long id;
+
+    private Long ownerId;
     
     /**
      * 工作流名称

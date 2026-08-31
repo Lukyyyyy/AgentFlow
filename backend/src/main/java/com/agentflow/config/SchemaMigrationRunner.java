@@ -17,6 +17,10 @@ import org.springframework.stereotype.Component;
 @Order(0)
 public class SchemaMigrationRunner implements ApplicationRunner {
 
+    private static final String LEGACY_OWNER_EMAIL = "765754281@qq.com";
+
+    private final JdbcTemplate jdbcTemplate;
+
     @Value("${agentflow.default-username:}")
     private String defaultUsername;
 
@@ -25,8 +29,6 @@ public class SchemaMigrationRunner implements ApplicationRunner {
 
     @Value("${agentflow.default-email:}")
     private String defaultEmail;
-
-    private final JdbcTemplate jdbcTemplate;
 
     public SchemaMigrationRunner(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -202,6 +204,7 @@ public class SchemaMigrationRunner implements ApplicationRunner {
                 "ALTER TABLE knowledge_chunk ADD COLUMN status VARCHAR(30) DEFAULT 'READY' COMMENT '状态' AFTER embedding");
         addColumnIfMissing("knowledge_chunk", "char_count",
                 "ALTER TABLE knowledge_chunk ADD COLUMN char_count INT DEFAULT 0 COMMENT '字符数' AFTER status");
+        migrateOwnership();
     }
 
     private void createDefaultUserIfMissing() {
@@ -227,6 +230,90 @@ public class SchemaMigrationRunner implements ApplicationRunner {
                 "INSERT INTO user (username, email, password_hash) VALUES (?, ?, ?)",
                 username, email, PasswordUtil.encode(defaultPassword));
         log.info("Schema migrated: created configured default user {}", email);
+    }
+
+    private void migrateOwnership() {
+        String[] tables = {"workflow", "llm_global_config", "mcp_tool_config", "knowledge_base", "agent_memory"};
+        for (String table : tables) {
+            if (!tableExists(table)) {
+                continue;
+            }
+            addColumnIfMissing(table, "owner_id",
+                    "ALTER TABLE " + table + " ADD COLUMN owner_id BIGINT NULL COMMENT '所属用户 ID' AFTER id");
+        }
+
+        Long legacyOwnerId = null;
+        for (String table : tables) {
+            if (!tableExists(table)) {
+                continue;
+            }
+            Long unowned = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM " + table + " WHERE owner_id IS NULL", Long.class);
+            if (unowned != null && unowned > 0) {
+                if (legacyOwnerId == null) {
+                    legacyOwnerId = findLegacyOwnerId();
+                }
+                jdbcTemplate.update("UPDATE " + table + " SET owner_id = ? WHERE owner_id IS NULL", legacyOwnerId);
+                log.info("Schema migrated: assigned {} legacy rows in {} to {}", unowned, table, LEGACY_OWNER_EMAIL);
+            }
+            makeOwnerNotNull(table);
+            addIndexIfMissing(table, "idx_" + table + "_owner",
+                    "CREATE INDEX idx_" + table + "_owner ON " + table + " (owner_id)");
+        }
+
+        if (tableExists("llm_global_config")) {
+            dropIndexIfExists("llm_global_config", "uk_provider_config_name");
+            addIndexIfMissing("llm_global_config", "uk_owner_provider_config_name",
+                    "CREATE UNIQUE INDEX uk_owner_provider_config_name "
+                            + "ON llm_global_config (owner_id, provider, config_name)");
+        }
+    }
+
+    private Long findLegacyOwnerId() {
+        var ids = jdbcTemplate.queryForList(
+                "SELECT id FROM user WHERE email = ? AND deleted = 0", Long.class, LEGACY_OWNER_EMAIL);
+        if (ids.size() != 1) {
+            throw new IllegalStateException("历史数据归属用户不存在或不唯一: " + LEGACY_OWNER_EMAIL);
+        }
+        return ids.get(0);
+    }
+
+    private boolean tableExists(String tableName) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+                """, Integer.class, tableName);
+        return count != null && count > 0;
+    }
+
+    private void makeOwnerNotNull(String tableName) {
+        String nullable = jdbcTemplate.queryForObject("""
+                SELECT IS_NULLABLE FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'owner_id'
+                """, String.class, tableName);
+        if ("YES".equalsIgnoreCase(nullable)) {
+            jdbcTemplate.execute("ALTER TABLE " + tableName + " MODIFY COLUMN owner_id BIGINT NOT NULL COMMENT '所属用户 ID'");
+        }
+    }
+
+    private void addIndexIfMissing(String tableName, String indexName, String ddl) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?
+                """, Integer.class, tableName, indexName);
+        if (count == null || count == 0) {
+            jdbcTemplate.execute(ddl);
+        }
+    }
+
+    private void dropIndexIfExists(String tableName, String indexName) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?
+                """, Integer.class, tableName, indexName);
+        if (count != null && count > 0) {
+            jdbcTemplate.execute("DROP INDEX " + indexName + " ON " + tableName);
+        }
     }
 
     private void createTableIfMissing(String tableName, String ddl) {

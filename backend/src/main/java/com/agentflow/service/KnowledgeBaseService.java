@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.agentflow.dto.KnowledgeBaseRequest;
+import com.agentflow.common.ResourceNotFoundException;
 import com.agentflow.dto.KnowledgePreviewRequest;
 import com.agentflow.dto.KnowledgeSearchRequest;
 import com.agentflow.dto.KnowledgeTextImportRequest;
@@ -56,18 +57,19 @@ public class KnowledgeBaseService {
         this.agentPlanClient = agentPlanClient;
     }
 
-    public List<Map<String, Object>> listKnowledgeBases() {
+    public List<Map<String, Object>> listKnowledgeBases(Long ownerId) {
         return knowledgeBaseMapper.selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                        .eq(KnowledgeBase::getOwnerId, ownerId)
                         .orderByDesc(KnowledgeBase::getUpdatedAt))
                 .stream()
                 .map(this::toBaseMap)
                 .toList();
     }
 
-    public Map<String, Object> getKnowledgeBase(Long id) {
-        KnowledgeBase base = requireBase(id);
+    public Map<String, Object> getKnowledgeBase(Long ownerId, Long id) {
+        KnowledgeBase base = requireBase(ownerId, id);
         Map<String, Object> output = toBaseMap(base);
-        output.put("documents", listDocuments(id));
+        output.put("documents", listDocuments(ownerId, id));
         output.put("recentTasks", knowledgeIndexTaskMapper.selectList(new LambdaQueryWrapper<KnowledgeIndexTask>()
                 .eq(KnowledgeIndexTask::getKnowledgeBaseId, id)
                 .orderByDesc(KnowledgeIndexTask::getUpdatedAt)
@@ -76,8 +78,8 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
-    public void deleteKnowledgeBase(Long id) {
-        requireBase(id);
+    public void deleteKnowledgeBase(Long ownerId, Long id) {
+        requireBase(ownerId, id);
         knowledgeChunkMapper.delete(new LambdaQueryWrapper<KnowledgeChunk>()
                 .eq(KnowledgeChunk::getKnowledgeBaseId, id));
         knowledgeIndexTaskMapper.delete(new LambdaQueryWrapper<KnowledgeIndexTask>()
@@ -88,8 +90,10 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
-    public Map<String, Object> createKnowledgeBase(KnowledgeBaseRequest request) {
+    public Map<String, Object> createKnowledgeBase(Long ownerId, KnowledgeBaseRequest request) {
+        configResolver.requireOwnedConfig(ownerId, request.getConfigId());
         KnowledgeBase base = new KnowledgeBase();
+        base.setOwnerId(ownerId);
         base.setName(request.getName().trim());
         base.setDescription(trimToNull(request.getDescription()));
         base.setConfigId(request.getConfigId());
@@ -105,8 +109,8 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
-    public Map<String, Object> importText(Long knowledgeBaseId, KnowledgeTextImportRequest request) {
-        KnowledgeBase base = requireBase(knowledgeBaseId);
+    public Map<String, Object> importText(Long ownerId, Long knowledgeBaseId, KnowledgeTextImportRequest request) {
+        KnowledgeBase base = requireBase(ownerId, knowledgeBaseId);
         KnowledgeDocument document = new KnowledgeDocument();
         document.setKnowledgeBaseId(base.getId());
         document.setTitle(firstText(request.getTitle(), "未命名文本"));
@@ -121,7 +125,7 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
-    public Map<String, Object> uploadTextFile(Long knowledgeBaseId, MultipartFile file) throws Exception {
+    public Map<String, Object> uploadTextFile(Long ownerId, Long knowledgeBaseId, MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("上传文件不能为空");
         }
@@ -133,14 +137,15 @@ public class KnowledgeBaseService {
         KnowledgeTextImportRequest request = new KnowledgeTextImportRequest();
         request.setTitle(fileName);
         request.setContent(content);
-        Map<String, Object> output = importText(knowledgeBaseId, request);
+        Map<String, Object> output = importText(ownerId, knowledgeBaseId, request);
         KnowledgeDocument document = knowledgeDocumentMapper.selectById(((Number) output.get("id")).longValue());
         document.setFileName(fileName);
         knowledgeDocumentMapper.updateById(document);
         return toDocumentMap(document);
     }
 
-    public List<Map<String, Object>> listDocuments(Long knowledgeBaseId) {
+    public List<Map<String, Object>> listDocuments(Long ownerId, Long knowledgeBaseId) {
+        requireBase(ownerId, knowledgeBaseId);
         return knowledgeDocumentMapper.selectList(new LambdaQueryWrapper<KnowledgeDocument>()
                         .eq(KnowledgeDocument::getKnowledgeBaseId, knowledgeBaseId)
                         .orderByDesc(KnowledgeDocument::getUpdatedAt))
@@ -149,8 +154,8 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
-    public List<Map<String, Object>> previewChunks(Long knowledgeBaseId, Long documentId, KnowledgePreviewRequest request) {
-        KnowledgeBase base = requireBase(knowledgeBaseId);
+    public List<Map<String, Object>> previewChunks(Long ownerId, Long knowledgeBaseId, Long documentId, KnowledgePreviewRequest request) {
+        KnowledgeBase base = requireBase(ownerId, knowledgeBaseId);
         KnowledgeDocument document = requireDocument(knowledgeBaseId, documentId);
         int chunkSize = normalizeChunkSize(request == null ? null : request.getChunkSize(), base.getChunkSize());
         int overlap = normalizeChunkOverlap(request == null ? null : request.getChunkOverlap(), chunkSize, base.getChunkOverlap());
@@ -167,15 +172,15 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
-    public Map<String, Object> indexDocument(Long knowledgeBaseId, Long documentId) {
-        KnowledgeBase base = requireBase(knowledgeBaseId);
+    public Map<String, Object> indexDocument(Long ownerId, Long knowledgeBaseId, Long documentId) {
+        KnowledgeBase base = requireBase(ownerId, knowledgeBaseId);
         KnowledgeDocument document = requireDocument(knowledgeBaseId, documentId);
         KnowledgeIndexTask task = createTask(base.getId(), document.getId());
         try {
             List<String> chunks = splitContent(document.getRawText(), base.getChunkSize(), base.getChunkOverlap());
             markOldChunksDeleted(base.getId(), document.getId());
 
-            ResolvedAgentPlanConfig config = configResolver.resolveKnowledgeConfig(base.getConfigId(), base.getEmbeddingModel());
+            ResolvedAgentPlanConfig config = configResolver.resolveKnowledgeConfig(ownerId, base.getConfigId(), base.getEmbeddingModel());
             boolean canEmbed = StringUtils.hasText(config.apiUrl()) && StringUtils.hasText(config.apiKey()) && StringUtils.hasText(config.model());
             for (int i = 0; i < chunks.size(); i++) {
                 String chunkText = chunks.get(i);
@@ -219,46 +224,46 @@ public class KnowledgeBaseService {
         return toTaskMap(task);
     }
 
-    public Map<String, Object> search(Long knowledgeBaseId, KnowledgeSearchRequest request) {
-        KnowledgeBase base = requireBase(knowledgeBaseId);
+    public Map<String, Object> search(Long ownerId, Long knowledgeBaseId, KnowledgeSearchRequest request) {
+        KnowledgeBase base = requireBase(ownerId, knowledgeBaseId);
         List<Double> queryEmbedding = List.of();
         try {
-            ResolvedAgentPlanConfig config = configResolver.resolveKnowledgeConfig(base.getConfigId(), base.getEmbeddingModel());
+            ResolvedAgentPlanConfig config = configResolver.resolveKnowledgeConfig(ownerId, base.getConfigId(), base.getEmbeddingModel());
             if (StringUtils.hasText(config.apiUrl()) && StringUtils.hasText(config.apiKey()) && StringUtils.hasText(config.model())) {
                 queryEmbedding = agentPlanClient.createEmbedding(config, request.getQuery());
             }
         } catch (Exception ignored) {
             queryEmbedding = List.of();
         }
-        return retrieve(String.valueOf(base.getId()), request.getQuery(), queryEmbedding,
+        return retrieve(ownerId, String.valueOf(base.getId()), request.getQuery(), queryEmbedding,
                 request.getTopK() == null ? 5 : request.getTopK(),
                 request.getScoreThreshold() == null ? 0.2 : request.getScoreThreshold());
     }
 
-    public Map<String, Object> searchRuntime(String knowledgeBaseId, String query, int topK, double scoreThreshold) {
-        Long baseId = resolveBaseId(knowledgeBaseId);
-        KnowledgeBase base = requireBase(baseId);
+    public Map<String, Object> searchRuntime(Long ownerId, String knowledgeBaseId, String query, int topK, double scoreThreshold) {
+        Long baseId = resolveBaseId(ownerId, knowledgeBaseId);
+        KnowledgeBase base = requireBase(ownerId, baseId);
         List<Double> queryEmbedding = List.of();
         try {
-            ResolvedAgentPlanConfig config = configResolver.resolveKnowledgeConfig(base.getConfigId(), base.getEmbeddingModel());
+            ResolvedAgentPlanConfig config = configResolver.resolveKnowledgeConfig(ownerId, base.getConfigId(), base.getEmbeddingModel());
             if (StringUtils.hasText(config.apiUrl()) && StringUtils.hasText(config.apiKey()) && StringUtils.hasText(config.model())) {
                 queryEmbedding = agentPlanClient.createEmbedding(config, query);
             }
         } catch (Exception ignored) {
             queryEmbedding = List.of();
         }
-        return retrieve(String.valueOf(base.getId()), query, queryEmbedding, topK, scoreThreshold);
+        return retrieve(ownerId, String.valueOf(base.getId()), query, queryEmbedding, topK, scoreThreshold);
     }
 
-    public Map<String, Object> upsert(String knowledgeBaseId, String title, String content,
+    public Map<String, Object> upsert(Long ownerId, String knowledgeBaseId, String title, String content,
                                       String sourceUrl, List<String> tags, List<Double> embedding,
                                       String embeddingModel) {
-        KnowledgeBase base = resolveBaseForRuntime(knowledgeBaseId, embeddingModel);
+        KnowledgeBase base = resolveBaseForRuntime(ownerId, knowledgeBaseId, embeddingModel);
         KnowledgeTextImportRequest request = new KnowledgeTextImportRequest();
         request.setTitle(firstText(title, "工作流写入"));
         request.setContent(content);
         request.setTags(tags == null ? null : String.join(",", tags));
-        Map<String, Object> documentMap = importText(base.getId(), request);
+        Map<String, Object> documentMap = importText(ownerId, base.getId(), request);
         KnowledgeDocument document = knowledgeDocumentMapper.selectById(((Number) documentMap.get("id")).longValue());
         List<String> chunks = splitContent(content, base.getChunkSize(), base.getChunkOverlap());
         markOldChunksDeleted(base.getId(), document.getId());
@@ -290,9 +295,9 @@ public class KnowledgeBaseService {
         return output;
     }
 
-    public Map<String, Object> retrieve(String knowledgeBaseId, String query, List<Double> queryEmbedding,
+    public Map<String, Object> retrieve(Long ownerId, String knowledgeBaseId, String query, List<Double> queryEmbedding,
                                         int topK, double scoreThreshold) {
-        Long baseId = resolveBaseId(knowledgeBaseId);
+        Long baseId = resolveBaseId(ownerId, knowledgeBaseId);
         double effectiveThreshold = scoreThreshold <= 0 ? 0.000001 : scoreThreshold;
         List<Map<String, Object>> matches = knowledgeChunkMapper.selectList(new LambdaQueryWrapper<KnowledgeChunk>()
                         .eq(KnowledgeChunk::getKnowledgeBaseId, baseId)
@@ -328,12 +333,13 @@ public class KnowledgeBaseService {
         return task;
     }
 
-    private KnowledgeBase resolveBaseForRuntime(String knowledgeBaseId, String embeddingModel) {
+    private KnowledgeBase resolveBaseForRuntime(Long ownerId, String knowledgeBaseId, String embeddingModel) {
         if (StringUtils.hasText(knowledgeBaseId) && !"default".equalsIgnoreCase(knowledgeBaseId.trim())) {
             try {
-                return requireBase(Long.parseLong(knowledgeBaseId.trim()));
+                return requireBase(ownerId, Long.parseLong(knowledgeBaseId.trim()));
             } catch (NumberFormatException ignored) {
                 KnowledgeBase named = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
+                        .eq(KnowledgeBase::getOwnerId, ownerId)
                         .eq(KnowledgeBase::getName, knowledgeBaseId.trim())
                         .last("LIMIT 1"));
                 if (named != null) {
@@ -342,6 +348,7 @@ public class KnowledgeBaseService {
             }
         }
         KnowledgeBase existing = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
+                .eq(KnowledgeBase::getOwnerId, ownerId)
                 .eq(KnowledgeBase::getName, "默认知识库")
                 .last("LIMIT 1"));
         if (existing != null) {
@@ -351,21 +358,27 @@ public class KnowledgeBaseService {
         request.setName("默认知识库");
         request.setDescription("工作流运行时自动写入的默认知识库");
         request.setEmbeddingModel(embeddingModel);
-        Map<String, Object> created = createKnowledgeBase(request);
-        return requireBase(((Number) created.get("id")).longValue());
+        Map<String, Object> created = createKnowledgeBase(ownerId, request);
+        return requireBase(ownerId, ((Number) created.get("id")).longValue());
     }
 
-    private Long resolveBaseId(String knowledgeBaseId) {
-        KnowledgeBase base = resolveBaseForRuntime(knowledgeBaseId, null);
+    private Long resolveBaseId(Long ownerId, String knowledgeBaseId) {
+        KnowledgeBase base = resolveBaseForRuntime(ownerId, knowledgeBaseId, null);
         return base.getId();
     }
 
-    private KnowledgeBase requireBase(Long id) {
-        KnowledgeBase base = knowledgeBaseMapper.selectById(id);
+    private KnowledgeBase requireBase(Long ownerId, Long id) {
+        KnowledgeBase base = knowledgeBaseMapper.selectOne(new LambdaQueryWrapper<KnowledgeBase>()
+                .eq(KnowledgeBase::getOwnerId, ownerId)
+                .eq(KnowledgeBase::getId, id));
         if (base == null) {
-            throw new IllegalArgumentException("知识库不存在");
+            throw new ResourceNotFoundException("知识库不存在");
         }
         return base;
+    }
+
+    public void requireOwnedBase(Long ownerId, Long id) {
+        requireBase(ownerId, id);
     }
 
     private KnowledgeDocument requireDocument(Long knowledgeBaseId, Long documentId) {
@@ -384,7 +397,7 @@ public class KnowledgeBaseService {
     }
 
     private void refreshBaseStats(Long baseId, String status) {
-        KnowledgeBase base = requireBase(baseId);
+        KnowledgeBase base = knowledgeBaseMapper.selectById(baseId);
         Long documentCount = knowledgeDocumentMapper.selectCount(new LambdaQueryWrapper<KnowledgeDocument>()
                 .eq(KnowledgeDocument::getKnowledgeBaseId, baseId));
         Long chunkCount = knowledgeChunkMapper.selectCount(new LambdaQueryWrapper<KnowledgeChunk>()

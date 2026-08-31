@@ -228,7 +228,8 @@ public abstract class AbstractLLMNodeExecutor implements NodeExecutor {
                 if (!isBlank(memoryConfig.apiUrl()) && !isBlank(memoryConfig.apiKey()) && !isBlank(memoryConfig.model())) {
                     embedding = agentPlanClient.createEmbedding(memoryConfig, query);
                 }
-                Map<String, Object> memoryResult = agentMemoryService.retrieve(query, "workflow", List.of(), embedding, topK);
+                Map<String, Object> memoryResult = agentMemoryService.retrieve(
+                        node.getOwnerId(), query, "workflow", List.of(), embedding, topK);
                 String memoryContext = textData(memoryResult.get("context"));
                 if (!memoryContext.isBlank()) {
                     context.append("相关记忆:\n").append(memoryContext).append("\n\n");
@@ -243,7 +244,8 @@ public abstract class AbstractLLMNodeExecutor implements NodeExecutor {
             try {
                 int topK = intData(data, "knowledgeTopK", 5);
                 double threshold = doubleData(data, "knowledgeScoreThreshold", 0.2);
-                Map<String, Object> knowledgeResult = knowledgeBaseService.searchRuntime(knowledgeBaseId, query, topK, threshold);
+                Map<String, Object> knowledgeResult = knowledgeBaseService.searchRuntime(
+                        node.getOwnerId(), knowledgeBaseId, query, topK, threshold);
                 String knowledgeContext = textData(knowledgeResult.get("context"));
                 if (!knowledgeContext.isBlank()) {
                     context.append("知识库上下文:\n").append(knowledgeContext).append("\n\n");
@@ -462,7 +464,7 @@ public abstract class AbstractLLMNodeExecutor implements NodeExecutor {
                 : null;
 
         if (configId != null) {
-            LLMGlobalConfig globalConfig = llmGlobalConfigService.getById(configId);
+            LLMGlobalConfig globalConfig = llmGlobalConfigService.getOwnedById(node.getOwnerId(), configId);
             if (globalConfig != null) {
                 config.setApiUrl(globalConfig.getApiUrl());
                 config.setApiKey(globalConfig.getApiKey());

@@ -29,7 +29,7 @@ class KnowledgeBaseServiceTest {
                 chunk(2L, "语音能力", "TTS 节点负责把文本转换成语音，适合播报和配音。")
         ));
 
-        Map<String, Object> result = service.retrieve("1", "联网搜索应该怎么做?", List.of(), 5, 0);
+        Map<String, Object> result = service.retrieve(7L, "1", "联网搜索应该怎么做?", List.of(), 5, 0);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> chunks = (List<Map<String, Object>>) result.get("chunks");
@@ -46,7 +46,7 @@ class KnowledgeBaseServiceTest {
                 chunk(1L, "语音能力", "TTS 节点负责把文本转换成语音，适合播报和配音。")
         ));
 
-        Map<String, Object> result = service.retrieve("1", "联网搜索应该怎么做?", List.of(), 5, 0);
+        Map<String, Object> result = service.retrieve(7L, "1", "联网搜索应该怎么做?", List.of(), 5, 0);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> chunks = (List<Map<String, Object>>) result.get("chunks");
@@ -59,7 +59,7 @@ class KnowledgeBaseServiceTest {
         KnowledgeBase base = new KnowledgeBase();
         base.setId(1L);
         base.setName("测试知识库");
-        when(baseMapper.selectById(1L)).thenReturn(base);
+        when(baseMapper.selectOne(any())).thenReturn(base);
         return new KnowledgeBaseService(
                 baseMapper,
                 mock(KnowledgeDocumentMapper.class),

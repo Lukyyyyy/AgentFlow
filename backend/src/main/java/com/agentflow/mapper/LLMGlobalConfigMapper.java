@@ -18,9 +18,11 @@ public interface LLMGlobalConfigMapper extends BaseMapper<LLMGlobalConfig> {
             FROM llm_global_config
             WHERE provider = #{provider}
               AND config_name = #{configName}
+              AND owner_id = #{ownerId}
             LIMIT 1
             """)
-    LLMGlobalConfig findAnyByProviderAndConfigName(@Param("provider") String provider,
+    LLMGlobalConfig findAnyByProviderAndConfigName(@Param("ownerId") Long ownerId,
+                                                   @Param("provider") String provider,
                                                    @Param("configName") String configName);
 
     @Delete("""

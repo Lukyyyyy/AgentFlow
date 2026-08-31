@@ -17,11 +17,12 @@ public class AgentMemoryService {
 
     private final List<MemoryRecord> memories = new CopyOnWriteArrayList<>();
 
-    public Map<String, Object> write(String content, String memoryType, String scope,
+    public Map<String, Object> write(Long ownerId, String content, String memoryType, String scope,
                                      List<String> tags, String source, List<Double> embedding,
                                      String embeddingModel) {
         MemoryRecord record = new MemoryRecord(
                 UUID.randomUUID().toString(),
+                ownerId,
                 StringUtils.hasText(scope) ? scope : "workflow",
                 StringUtils.hasText(memoryType) ? memoryType : "fact",
                 content,
@@ -40,9 +41,10 @@ public class AgentMemoryService {
         return output;
     }
 
-    public Map<String, Object> retrieve(String query, String scope, List<String> tags,
+    public Map<String, Object> retrieve(Long ownerId, String query, String scope, List<String> tags,
                                         List<Double> queryEmbedding, int topK) {
         List<Map<String, Object>> matches = memories.stream()
+                .filter(memory -> ownerId != null && ownerId.equals(memory.ownerId()))
                 .filter(memory -> !StringUtils.hasText(scope) || scope.equals(memory.scope()))
                 .filter(memory -> tags == null || tags.isEmpty() || memory.tags().containsAll(tags))
                 .map(memory -> toMatch(memory, query, queryEmbedding))
@@ -116,6 +118,7 @@ public class AgentMemoryService {
 
     private record MemoryRecord(
             String id,
+            Long ownerId,
             String scope,
             String memoryType,
             String content,

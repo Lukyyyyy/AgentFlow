@@ -39,6 +39,7 @@ public class MemoryWriteNodeExecutor extends AbstractAgentPlanNodeExecutor {
         }
 
         return memoryService.write(
+                node.getOwnerId(),
                 content,
                 stringData(node, "memoryType", "fact"),
                 stringData(node, "scope", "workflow"),

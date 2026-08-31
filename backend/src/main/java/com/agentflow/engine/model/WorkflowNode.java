@@ -8,6 +8,8 @@ import java.util.Map;
  */
 @Data
 public class WorkflowNode {
+
+    private Long ownerId;
     
     /**
      * 节点 ID

@@ -28,68 +28,69 @@ public class KnowledgeBaseController {
 
     @Operation(summary = "查询知识库列表")
     @GetMapping
-    public Result<List<Map<String, Object>>> listKnowledgeBases() {
-        return Result.success(knowledgeBaseService.listKnowledgeBases());
+    public Result<List<Map<String, Object>>> listKnowledgeBases(@RequestAttribute Long userId) {
+        return Result.success(knowledgeBaseService.listKnowledgeBases(userId));
     }
 
     @Operation(summary = "创建知识库")
     @PostMapping
-    public Result<Map<String, Object>> createKnowledgeBase(@Valid @RequestBody KnowledgeBaseRequest request) {
-        return Result.success(knowledgeBaseService.createKnowledgeBase(request));
+    public Result<Map<String, Object>> createKnowledgeBase(@RequestAttribute Long userId,
+                                                           @Valid @RequestBody KnowledgeBaseRequest request) {
+        return Result.success(knowledgeBaseService.createKnowledgeBase(userId, request));
     }
 
     @Operation(summary = "获取知识库详情")
     @GetMapping("/{id}")
-    public Result<Map<String, Object>> getKnowledgeBase(@PathVariable Long id) {
-        return Result.success(knowledgeBaseService.getKnowledgeBase(id));
+    public Result<Map<String, Object>> getKnowledgeBase(@RequestAttribute Long userId, @PathVariable Long id) {
+        return Result.success(knowledgeBaseService.getKnowledgeBase(userId, id));
     }
 
     @Operation(summary = "删除知识库")
     @DeleteMapping("/{id}")
-    public Result<Void> deleteKnowledgeBase(@PathVariable Long id) {
-        knowledgeBaseService.deleteKnowledgeBase(id);
+    public Result<Void> deleteKnowledgeBase(@RequestAttribute Long userId, @PathVariable Long id) {
+        knowledgeBaseService.deleteKnowledgeBase(userId, id);
         return Result.success();
     }
 
     @Operation(summary = "导入粘贴文本")
     @PostMapping("/{id}/documents/text")
-    public Result<Map<String, Object>> importText(@PathVariable Long id,
+    public Result<Map<String, Object>> importText(@RequestAttribute Long userId, @PathVariable Long id,
                                                   @Valid @RequestBody KnowledgeTextImportRequest request) {
-        return Result.success(knowledgeBaseService.importText(id, request));
+        return Result.success(knowledgeBaseService.importText(userId, id, request));
     }
 
     @Operation(summary = "上传文本文件")
     @PostMapping("/{id}/documents/upload")
-    public Result<Map<String, Object>> uploadText(@PathVariable Long id,
+    public Result<Map<String, Object>> uploadText(@RequestAttribute Long userId, @PathVariable Long id,
                                                   @RequestParam("file") MultipartFile file) throws Exception {
-        return Result.success(knowledgeBaseService.uploadTextFile(id, file));
+        return Result.success(knowledgeBaseService.uploadTextFile(userId, id, file));
     }
 
     @Operation(summary = "查询知识库文档")
     @GetMapping("/{id}/documents")
-    public Result<List<Map<String, Object>>> listDocuments(@PathVariable Long id) {
-        return Result.success(knowledgeBaseService.listDocuments(id));
+    public Result<List<Map<String, Object>>> listDocuments(@RequestAttribute Long userId, @PathVariable Long id) {
+        return Result.success(knowledgeBaseService.listDocuments(userId, id));
     }
 
     @Operation(summary = "预览文档分片")
     @PostMapping("/{id}/documents/{documentId}/preview-chunks")
-    public Result<List<Map<String, Object>>> previewChunks(@PathVariable Long id,
+    public Result<List<Map<String, Object>>> previewChunks(@RequestAttribute Long userId, @PathVariable Long id,
                                                            @PathVariable Long documentId,
                                                            @RequestBody(required = false) KnowledgePreviewRequest request) {
-        return Result.success(knowledgeBaseService.previewChunks(id, documentId, request));
+        return Result.success(knowledgeBaseService.previewChunks(userId, id, documentId, request));
     }
 
     @Operation(summary = "建立文档索引")
     @PostMapping("/{id}/documents/{documentId}/index")
-    public Result<Map<String, Object>> indexDocument(@PathVariable Long id,
+    public Result<Map<String, Object>> indexDocument(@RequestAttribute Long userId, @PathVariable Long id,
                                                      @PathVariable Long documentId) {
-        return Result.success(knowledgeBaseService.indexDocument(id, documentId));
+        return Result.success(knowledgeBaseService.indexDocument(userId, id, documentId));
     }
 
     @Operation(summary = "检索测试")
     @PostMapping("/{id}/search")
-    public Result<Map<String, Object>> search(@PathVariable Long id,
+    public Result<Map<String, Object>> search(@RequestAttribute Long userId, @PathVariable Long id,
                                               @Valid @RequestBody KnowledgeSearchRequest request) {
-        return Result.success(knowledgeBaseService.search(id, request));
+        return Result.success(knowledgeBaseService.search(userId, id, request));
     }
 }

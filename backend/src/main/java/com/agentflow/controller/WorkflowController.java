@@ -25,36 +25,38 @@ public class WorkflowController {
     
     @Operation(summary = "创建工作流")
     @PostMapping
-    public Result<WorkflowResponse> createWorkflow(@Valid @RequestBody WorkflowRequest request) {
-        WorkflowResponse response = workflowService.createWorkflow(request);
+    public Result<WorkflowResponse> createWorkflow(@RequestAttribute Long userId,
+                                                     @Valid @RequestBody WorkflowRequest request) {
+        WorkflowResponse response = workflowService.createWorkflow(userId, request);
         return Result.success(response);
     }
     
     @Operation(summary = "更新工作流")
     @PutMapping("/{id}")
-    public Result<WorkflowResponse> updateWorkflow(@PathVariable Long id, @Valid @RequestBody WorkflowRequest request) {
-        WorkflowResponse response = workflowService.updateWorkflow(id, request);
+    public Result<WorkflowResponse> updateWorkflow(@RequestAttribute Long userId, @PathVariable Long id,
+                                                     @Valid @RequestBody WorkflowRequest request) {
+        WorkflowResponse response = workflowService.updateWorkflow(userId, id, request);
         return Result.success(response);
     }
     
     @Operation(summary = "删除工作流")
     @DeleteMapping("/{id}")
-    public Result<Void> deleteWorkflow(@PathVariable Long id) {
-        workflowService.deleteWorkflow(id);
+    public Result<Void> deleteWorkflow(@RequestAttribute Long userId, @PathVariable Long id) {
+        workflowService.deleteWorkflow(userId, id);
         return Result.success();
     }
     
     @Operation(summary = "获取工作流详情")
     @GetMapping("/{id}")
-    public Result<WorkflowResponse> getWorkflow(@PathVariable Long id) {
-        WorkflowResponse response = workflowService.getWorkflowById(id);
+    public Result<WorkflowResponse> getWorkflow(@RequestAttribute Long userId, @PathVariable Long id) {
+        WorkflowResponse response = workflowService.getWorkflowById(userId, id);
         return Result.success(response);
     }
     
     @Operation(summary = "查询工作流列表")
     @GetMapping
-    public Result<List<WorkflowResponse>> listWorkflows() {
-        List<WorkflowResponse> list = workflowService.listWorkflows();
+    public Result<List<WorkflowResponse>> listWorkflows(@RequestAttribute Long userId) {
+        List<WorkflowResponse> list = workflowService.listWorkflows(userId);
         return Result.success(list);
     }
 }

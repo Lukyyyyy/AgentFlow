@@ -57,7 +57,7 @@ public class TTSNodeExecutor implements NodeExecutor {
         }
         
         Map<String, Object> data = node.getData();
-        TtsRuntimeConfig config = resolveConfig(data);
+        TtsRuntimeConfig config = resolveConfig(node.getOwnerId(), data);
         
         validateConfig(config);
         
@@ -161,7 +161,7 @@ public class TTSNodeExecutor implements NodeExecutor {
         return output;
     }
 
-    private TtsRuntimeConfig resolveConfig(Map<String, Object> data) {
+    private TtsRuntimeConfig resolveConfig(Long ownerId, Map<String, Object> data) {
         Long configId = parseLong(data.get("configId"));
         String provider = null;
         String apiUrl = null;
@@ -170,7 +170,7 @@ public class TTSNodeExecutor implements NodeExecutor {
         boolean explicitTtsModel = false;
 
         if (configId != null) {
-            LLMGlobalConfig globalConfig = llmGlobalConfigService.getById(configId);
+            LLMGlobalConfig globalConfig = llmGlobalConfigService.getOwnedById(ownerId, configId);
             if (globalConfig != null) {
                 provider = canonicalizeProvider(globalConfig.getProvider());
                 apiUrl = trimString(globalConfig.getApiUrl());

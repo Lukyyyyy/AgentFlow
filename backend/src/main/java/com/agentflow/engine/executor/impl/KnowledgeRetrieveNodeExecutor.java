@@ -39,6 +39,7 @@ public class KnowledgeRetrieveNodeExecutor extends AbstractAgentPlanNodeExecutor
         }
 
         Map<String, Object> output = knowledgeBaseService.retrieve(
+                node.getOwnerId(),
                 stringData(node, "knowledgeBaseId", "default"),
                 query,
                 embedding,

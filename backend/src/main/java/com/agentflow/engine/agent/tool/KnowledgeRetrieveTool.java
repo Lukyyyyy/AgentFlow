@@ -45,7 +45,8 @@ public class KnowledgeRetrieveTool implements AgentTool {
                 arguments.get("scoreThreshold"),
                 0.2
         );
-        return knowledgeBaseService.searchRuntime(knowledgeBaseId, query, topK, scoreThreshold);
+        return knowledgeBaseService.searchRuntime(
+                context.node().getOwnerId(), knowledgeBaseId, query, topK, scoreThreshold);
     }
 
     private String firstText(Object... values) {

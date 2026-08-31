@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.agentflow.entity.LLMGlobalConfig;
+import com.agentflow.common.ResourceNotFoundException;
 import com.agentflow.mapper.LLMGlobalConfigMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,9 +21,10 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
     /**
      * 获取某提供商的所有配置
      */
-    public List<LLMGlobalConfig> listByProvider(String provider) {
+    public List<LLMGlobalConfig> listByProvider(Long ownerId, String provider) {
         LambdaQueryWrapper<LLMGlobalConfig> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LLMGlobalConfig::getProvider, provider)
+        wrapper.eq(LLMGlobalConfig::getOwnerId, ownerId)
+               .eq(LLMGlobalConfig::getProvider, provider)
                .orderByDesc(LLMGlobalConfig::getIsDefault)
                .orderByDesc(LLMGlobalConfig::getUpdatedAt);
         return this.list(wrapper);
@@ -31,9 +33,16 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
     /**
      * 获取某提供商的默认配置
      */
-    public LLMGlobalConfig getDefaultConfig(String provider) {
+    public List<LLMGlobalConfig> listAll(Long ownerId) {
+        return this.list(new LambdaQueryWrapper<LLMGlobalConfig>()
+                .eq(LLMGlobalConfig::getOwnerId, ownerId)
+                .orderByDesc(LLMGlobalConfig::getUpdatedAt));
+    }
+
+    public LLMGlobalConfig getDefaultConfig(Long ownerId, String provider) {
         LambdaQueryWrapper<LLMGlobalConfig> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LLMGlobalConfig::getProvider, provider)
+        wrapper.eq(LLMGlobalConfig::getOwnerId, ownerId)
+               .eq(LLMGlobalConfig::getProvider, provider)
                .eq(LLMGlobalConfig::getIsDefault, 1);
         return this.getOne(wrapper);
     }
@@ -43,15 +52,13 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
      * 先清除该提供商的其他默认配置，再设置指定配置为默认
      */
     @Transactional
-    public void setDefaultConfig(Long id) {
-        LLMGlobalConfig config = this.getById(id);
-        if (config == null) {
-            throw new RuntimeException("配置不存在");
-        }
+    public void setDefaultConfig(Long ownerId, Long id) {
+        LLMGlobalConfig config = requireConfig(ownerId, id);
 
         // 清除该提供商的其他默认配置
         LambdaUpdateWrapper<LLMGlobalConfig> clearWrapper = new LambdaUpdateWrapper<>();
-        clearWrapper.eq(LLMGlobalConfig::getProvider, config.getProvider())
+        clearWrapper.eq(LLMGlobalConfig::getOwnerId, ownerId)
+                    .eq(LLMGlobalConfig::getProvider, config.getProvider())
                     .set(LLMGlobalConfig::getIsDefault, 0);
         this.update(clearWrapper);
 
@@ -65,14 +72,18 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
      * 如果是第一个配置，自动设置为默认
      */
     @Transactional
-    public LLMGlobalConfig saveConfig(LLMGlobalConfig config) {
+    public LLMGlobalConfig saveConfig(Long ownerId, LLMGlobalConfig config) {
+        if (config.getId() != null) {
+            requireConfig(ownerId, config.getId());
+        }
+        config.setOwnerId(ownerId);
         normalizeConfig(config);
         validateConfig(config);
         purgeDeletedDuplicate(config);
         ensureUniqueProviderAndConfigName(config);
 
         // 检查是否是该提供商的第一个配置
-        long count = this.countByProvider(config.getProvider());
+        long count = this.countByProvider(ownerId, config.getProvider());
 
         if (config.getId() == null) {
             // 新增配置
@@ -87,7 +98,8 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
             if (config.getIsDefault() != null && config.getIsDefault() == 1) {
                 // 如果要设置为默认，先清除其他默认配置
                 LambdaUpdateWrapper<LLMGlobalConfig> clearWrapper = new LambdaUpdateWrapper<>();
-                clearWrapper.eq(LLMGlobalConfig::getProvider, config.getProvider())
+                clearWrapper.eq(LLMGlobalConfig::getOwnerId, ownerId)
+                           .eq(LLMGlobalConfig::getProvider, config.getProvider())
                            .ne(LLMGlobalConfig::getId, config.getId())
                            .set(LLMGlobalConfig::getIsDefault, 0);
                 this.update(clearWrapper);
@@ -100,6 +112,7 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
 
     private void purgeDeletedDuplicate(LLMGlobalConfig config) {
         LLMGlobalConfig existing = baseMapper.findAnyByProviderAndConfigName(
+                config.getOwnerId(),
                 config.getProvider(),
                 config.getConfigName()
         );
@@ -151,7 +164,8 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
 
     private void ensureUniqueProviderAndConfigName(LLMGlobalConfig config) {
         LambdaQueryWrapper<LLMGlobalConfig> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LLMGlobalConfig::getProvider, config.getProvider())
+        wrapper.eq(LLMGlobalConfig::getOwnerId, config.getOwnerId())
+               .eq(LLMGlobalConfig::getProvider, config.getProvider())
                .eq(LLMGlobalConfig::getConfigName, config.getConfigName());
 
         if (config.getId() != null) {
@@ -168,11 +182,8 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
      * 如果删除的是默认配置，自动将下一个配置设为默认
      */
     @Transactional
-    public void deleteConfig(Long id) {
-        LLMGlobalConfig config = this.getById(id);
-        if (config == null) {
-            return;
-        }
+    public void deleteConfig(Long ownerId, Long id) {
+        LLMGlobalConfig config = requireConfig(ownerId, id);
 
         String provider = config.getProvider();
         boolean wasDefault = config.getIsDefault() == 1;
@@ -181,7 +192,7 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
 
         // 如果删除的是默认配置，将下一个配置设为默认
         if (wasDefault) {
-            List<LLMGlobalConfig> remaining = this.listByProvider(provider);
+            List<LLMGlobalConfig> remaining = this.listByProvider(ownerId, provider);
             if (!remaining.isEmpty()) {
                 LLMGlobalConfig newDefault = remaining.get(0);
                 newDefault.setIsDefault(1);
@@ -193,10 +204,28 @@ public class LLMGlobalConfigService extends ServiceImpl<LLMGlobalConfigMapper, L
     /**
      * 统计某提供商的配置数量
      */
-    private long countByProvider(String provider) {
+    private long countByProvider(Long ownerId, String provider) {
         LambdaQueryWrapper<LLMGlobalConfig> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LLMGlobalConfig::getProvider, provider);
+        wrapper.eq(LLMGlobalConfig::getOwnerId, ownerId)
+               .eq(LLMGlobalConfig::getProvider, provider);
         return this.count(wrapper);
+    }
+
+    public LLMGlobalConfig getOwnedById(Long ownerId, Long id) {
+        if (ownerId == null || id == null) {
+            return null;
+        }
+        return this.getOne(new LambdaQueryWrapper<LLMGlobalConfig>()
+                .eq(LLMGlobalConfig::getOwnerId, ownerId)
+                .eq(LLMGlobalConfig::getId, id));
+    }
+
+    public LLMGlobalConfig requireConfig(Long ownerId, Long id) {
+        LLMGlobalConfig config = getOwnedById(ownerId, id);
+        if (config == null) {
+            throw new ResourceNotFoundException("配置不存在");
+        }
+        return config;
     }
 
     private String trimToNull(String value) {

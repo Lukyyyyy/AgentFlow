@@ -6,6 +6,7 @@ USE agentflow;
 -- 工作流表
 CREATE TABLE IF NOT EXISTS workflow (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '工作流主键 ID',
+    owner_id BIGINT NOT NULL COMMENT '所属用户 ID',
     name VARCHAR(255) NOT NULL COMMENT '工作流名称',
     description TEXT COMMENT '工作流描述',
     flow_data JSON NOT NULL COMMENT '工作流配置数据(节点和连线)',
@@ -14,7 +15,8 @@ CREATE TABLE IF NOT EXISTS workflow (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识(0-未删除,1-已删除)',
     INDEX idx_created_at (created_at),
-    INDEX idx_updated_at (updated_at)
+    INDEX idx_updated_at (updated_at),
+    INDEX idx_workflow_owner (owner_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工作流表';
 
 -- 节点定义表
@@ -141,6 +143,7 @@ INSERT INTO node_definition (node_type, display_name, category, icon, input_sche
 -- 全局模型配置表（LLM 与 TTS 共用）
 CREATE TABLE IF NOT EXISTS llm_global_config (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '配置主键 ID',
+    owner_id BIGINT NOT NULL COMMENT '所属用户 ID',
     provider VARCHAR(50) NOT NULL COMMENT '提供商: openai/deepseek/qwen/step/zhipu/ai_ping/apifree',
     config_name VARCHAR(100) NOT NULL COMMENT '配置名称',
     api_url VARCHAR(255) NOT NULL COMMENT 'API地址',
@@ -156,7 +159,8 @@ CREATE TABLE IF NOT EXISTS llm_global_config (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识(0-未删除,1-已删除)',
-    UNIQUE KEY uk_provider_config_name (provider, config_name),
+    UNIQUE KEY uk_owner_provider_config_name (owner_id, provider, config_name),
+    INDEX idx_llm_global_config_owner (owner_id),
     INDEX idx_provider (provider),
     INDEX idx_is_default (is_default)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='全局模型配置表';
@@ -164,6 +168,7 @@ CREATE TABLE IF NOT EXISTS llm_global_config (
 -- Agent 记忆表（MVP 持久化结构，执行器第一版可先通过服务层封装使用）
 CREATE TABLE IF NOT EXISTS agent_memory (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记忆主键 ID',
+    owner_id BIGINT NOT NULL COMMENT '所属用户 ID',
     scope VARCHAR(50) NOT NULL DEFAULT 'workflow' COMMENT '记忆范围(workflow/user/global)',
     memory_type VARCHAR(50) DEFAULT 'fact' COMMENT '记忆类型',
     content TEXT NOT NULL COMMENT '记忆内容',
@@ -172,6 +177,7 @@ CREATE TABLE IF NOT EXISTS agent_memory (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识',
+    INDEX idx_agent_memory_owner (owner_id),
     INDEX idx_scope (scope),
     INDEX idx_memory_type (memory_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent长期记忆表';
@@ -188,6 +194,7 @@ CREATE TABLE IF NOT EXISTS agent_memory_embedding (
 
 CREATE TABLE IF NOT EXISTS mcp_tool_config (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'MCP 工具配置 ID',
+    owner_id BIGINT NOT NULL COMMENT '所属用户 ID',
     name VARCHAR(100) NOT NULL COMMENT '名称',
     description VARCHAR(500) DEFAULT NULL COMMENT '描述',
     tool_type VARCHAR(50) DEFAULT 'custom' COMMENT '工具类型',
@@ -201,12 +208,14 @@ CREATE TABLE IF NOT EXISTS mcp_tool_config (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识',
+    INDEX idx_mcp_tool_config_owner (owner_id),
     INDEX idx_mcp_tool_name (tool_name),
     INDEX idx_mcp_tool_type (tool_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='MCP工具配置表';
 
 CREATE TABLE IF NOT EXISTS knowledge_base (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '知识库 ID',
+    owner_id BIGINT NOT NULL COMMENT '所属用户 ID',
     name VARCHAR(100) NOT NULL COMMENT '知识库名称',
     description VARCHAR(500) DEFAULT NULL COMMENT '知识库描述',
     config_id BIGINT DEFAULT NULL COMMENT 'Agent Plan 全局配置 ID',
@@ -220,6 +229,7 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted TINYINT DEFAULT 0 COMMENT '逻辑删除标识',
+    INDEX idx_knowledge_base_owner (owner_id),
     INDEX idx_knowledge_base_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识库表';
 

@@ -34,10 +34,11 @@ class AgentPlanConfigResolverTest {
         agentPlanDefault.setModel("doubao-model");
         agentPlanDefault.setImageModel("seedream-model");
 
-        when(configService.getById(12L)).thenReturn(stepConfig);
-        when(configService.getDefaultConfig("volcengine_agent_plan")).thenReturn(agentPlanDefault);
+        when(configService.getOwnedById(7L, 12L)).thenReturn(stepConfig);
+        when(configService.getDefaultConfig(7L, "volcengine_agent_plan")).thenReturn(agentPlanDefault);
 
         WorkflowNode node = new WorkflowNode();
+        node.setOwnerId(7L);
         Map<String, Object> data = new HashMap<>();
         data.put("configId", 12L);
         node.setData(data);

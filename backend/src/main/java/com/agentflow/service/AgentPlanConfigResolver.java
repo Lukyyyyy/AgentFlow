@@ -25,9 +25,10 @@ public class AgentPlanConfigResolver {
     public ResolvedAgentPlanConfig resolve(WorkflowNode node, String capability) {
         Map<String, Object> data = node.getData();
         Long nodeConfigId = parseLong(data.get("configId"));
-        LLMGlobalConfig nodeGlobalConfig = nodeConfigId != null ? llmGlobalConfigService.getById(nodeConfigId) : null;
+        LLMGlobalConfig nodeGlobalConfig = nodeConfigId != null
+                ? llmGlobalConfigService.getOwnedById(node.getOwnerId(), nodeConfigId) : null;
         Long explicitAgentPlanConfigId = parseLong(data.get("agentPlanConfigId"));
-        LLMGlobalConfig globalConfig = resolveAgentPlanConfig(explicitAgentPlanConfigId, nodeGlobalConfig);
+        LLMGlobalConfig globalConfig = resolveAgentPlanConfig(node.getOwnerId(), explicitAgentPlanConfigId, nodeGlobalConfig);
         Long configId = globalConfig != null ? globalConfig.getId() : null;
 
         String nodeModel = trim(data.get("model"));
@@ -82,11 +83,12 @@ public class AgentPlanConfigResolver {
     public ResolvedAgentPlanConfig resolveImageConfig(WorkflowNode node) {
         Map<String, Object> data = node.getData();
         Long nodeConfigId = parseLong(data.get("configId"));
-        LLMGlobalConfig globalConfig = nodeConfigId != null ? llmGlobalConfigService.getById(nodeConfigId) : null;
+        LLMGlobalConfig globalConfig = nodeConfigId != null
+                ? llmGlobalConfigService.getOwnedById(node.getOwnerId(), nodeConfigId) : null;
 
         String configuredProvider = canonicalizeProvider(trim(data.get("provider")));
         if (globalConfig == null) {
-            globalConfig = resolveDefaultImageConfig(configuredProvider);
+            globalConfig = resolveDefaultImageConfig(node.getOwnerId(), configuredProvider);
         }
 
         String nodeModel = trim(data.get("model"));
@@ -117,24 +119,25 @@ public class AgentPlanConfigResolver {
         );
     }
 
-    private LLMGlobalConfig resolveDefaultImageConfig(String configuredProvider) {
+    private LLMGlobalConfig resolveDefaultImageConfig(Long ownerId, String configuredProvider) {
         if (StringUtils.hasText(configuredProvider)) {
-            LLMGlobalConfig providerDefault = llmGlobalConfigService.getDefaultConfig(configuredProvider);
+            LLMGlobalConfig providerDefault = llmGlobalConfigService.getDefaultConfig(ownerId, configuredProvider);
             if (providerDefault != null) {
                 return providerDefault;
             }
         }
 
-        LLMGlobalConfig defaultAgentPlan = llmGlobalConfigService.getDefaultConfig("volcengine_agent_plan");
+        LLMGlobalConfig defaultAgentPlan = llmGlobalConfigService.getDefaultConfig(ownerId, "volcengine_agent_plan");
         if (defaultAgentPlan != null) {
             return defaultAgentPlan;
         }
-        return llmGlobalConfigService.getDefaultConfig("step");
+        return llmGlobalConfigService.getDefaultConfig(ownerId, "step");
     }
 
-    private LLMGlobalConfig resolveAgentPlanConfig(Long explicitAgentPlanConfigId, LLMGlobalConfig nodeGlobalConfig) {
+    private LLMGlobalConfig resolveAgentPlanConfig(Long ownerId, Long explicitAgentPlanConfigId,
+                                                   LLMGlobalConfig nodeGlobalConfig) {
         if (explicitAgentPlanConfigId != null) {
-            LLMGlobalConfig explicit = llmGlobalConfigService.getById(explicitAgentPlanConfigId);
+            LLMGlobalConfig explicit = llmGlobalConfigService.getOwnedById(ownerId, explicitAgentPlanConfigId);
             if (explicit != null && "volcengine_agent_plan".equals(canonicalizeProvider(explicit.getProvider()))) {
                 return explicit;
             }
@@ -144,7 +147,7 @@ public class AgentPlanConfigResolver {
             return nodeGlobalConfig;
         }
 
-        LLMGlobalConfig defaultAgentPlan = llmGlobalConfigService.getDefaultConfig("volcengine_agent_plan");
+        LLMGlobalConfig defaultAgentPlan = llmGlobalConfigService.getDefaultConfig(ownerId, "volcengine_agent_plan");
         if (defaultAgentPlan != null) {
             return defaultAgentPlan;
         }
@@ -152,8 +155,8 @@ public class AgentPlanConfigResolver {
         return nodeGlobalConfig;
     }
 
-    public ResolvedAgentPlanConfig resolveKnowledgeConfig(Long configId, String modelOverride) {
-        LLMGlobalConfig globalConfig = configId != null ? llmGlobalConfigService.getById(configId) : null;
+    public ResolvedAgentPlanConfig resolveKnowledgeConfig(Long ownerId, Long configId, String modelOverride) {
+        LLMGlobalConfig globalConfig = configId != null ? llmGlobalConfigService.getOwnedById(ownerId, configId) : null;
         String embeddingModel = firstText(
                 modelOverride,
                 globalConfig != null ? globalConfig.getEmbeddingModel() : null,
@@ -176,6 +179,12 @@ public class AgentPlanConfigResolver {
         if (!StringUtils.hasText(config.apiUrl()) || !StringUtils.hasText(config.apiKey())
                 || !StringUtils.hasText(config.model())) {
             throw new IllegalArgumentException(nodeName + " 节点缺少有效的 Agent Plan 配置，请选择全局配置或填写 API 信息");
+        }
+    }
+
+    public void requireOwnedConfig(Long ownerId, Long configId) {
+        if (configId != null) {
+            llmGlobalConfigService.requireConfig(ownerId, configId);
         }
     }
 

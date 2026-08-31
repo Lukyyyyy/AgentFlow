@@ -18,6 +18,8 @@ public class LLMGlobalConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long ownerId;
+
     /**
      * 提供商: openai/deepseek/qwen/step/zhipu/ai_ping
      */

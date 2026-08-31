@@ -17,6 +17,8 @@ public class KnowledgeBase {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long ownerId;
+
     private String name;
 
     private String description;

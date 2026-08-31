@@ -43,6 +43,7 @@ public class KnowledgeUpsertNodeExecutor extends AbstractAgentPlanNodeExecutor {
         }
 
         Map<String, Object> output = knowledgeBaseService.upsert(
+                node.getOwnerId(),
                 stringData(node, "knowledgeBaseId", "default"),
                 stringData(node, "title", null),
                 content,

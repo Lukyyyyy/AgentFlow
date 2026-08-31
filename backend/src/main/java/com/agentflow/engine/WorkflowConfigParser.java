@@ -20,14 +20,18 @@ public class WorkflowConfigParser {
     private static final String REACT_FLOW_NODE_TYPE = "workflow";
 
     public WorkflowConfig parse(String flowData) {
+        return parse(flowData, null);
+    }
+
+    public WorkflowConfig parse(String flowData, Long ownerId) {
         JSONObject root = JSON.parseObject(flowData);
         WorkflowConfig config = new WorkflowConfig();
-        config.setNodes(parseNodes(root.getJSONArray("nodes")));
+        config.setNodes(parseNodes(root.getJSONArray("nodes"), ownerId));
         config.setEdges(parseEdges(root.getJSONArray("edges")));
         return config;
     }
 
-    private List<WorkflowNode> parseNodes(JSONArray array) {
+    private List<WorkflowNode> parseNodes(JSONArray array, Long ownerId) {
         List<WorkflowNode> nodes = new ArrayList<>();
         if (array == null) {
             return nodes;
@@ -37,6 +41,7 @@ public class WorkflowConfigParser {
             JSONObject json = (JSONObject) item;
             JSONObject dataJson = json.getJSONObject("data");
             WorkflowNode node = new WorkflowNode();
+            node.setOwnerId(ownerId);
             node.setId(json.getString("id"));
             node.setType(resolveNodeType(json, dataJson));
             node.setData(parseMap(dataJson));

@@ -32,7 +32,8 @@ public class WebSearchNodeExecutor extends AbstractAgentPlanNodeExecutor {
         int limit = intData(node, "limit", 5);
         String freshness = stringData(node, "freshness", null);
         String language = stringData(node, "language", "zh");
-        McpToolConfig selectedMcp = mcpToolConfigService.resolveFirstEnabledWebSearch(node.getData().get("mcpToolIds"));
+        McpToolConfig selectedMcp = mcpToolConfigService.resolveFirstEnabledWebSearch(
+                node.getOwnerId(), node.getData().get("mcpToolIds"));
         if (selectedMcp == null) {
             throw new IllegalArgumentException("联网搜索节点未配置，请先在 MCP 工具中添加 Agent Plan 联网搜索，并在当前节点选择它");
         }

@@ -39,6 +39,7 @@ public class MemoryRetrieveNodeExecutor extends AbstractAgentPlanNodeExecutor {
         }
 
         Map<String, Object> output = memoryService.retrieve(
+                node.getOwnerId(),
                 query,
                 stringData(node, "scope", "workflow"),
                 memoryService.splitTags(stringData(node, "tags", "")),

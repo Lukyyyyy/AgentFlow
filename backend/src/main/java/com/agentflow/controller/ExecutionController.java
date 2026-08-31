@@ -3,6 +3,7 @@ package com.agentflow.controller;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.agentflow.common.Result;
+import com.agentflow.common.ResourceNotFoundException;
 import com.agentflow.dto.ExecutionEvent;
 import com.agentflow.dto.ExecutionRequest;
 import com.agentflow.dto.ExecutionResponse;
@@ -62,11 +63,9 @@ public class ExecutionController {
     
     @Operation(summary = "执行工作流")
     @PostMapping("/{id}/execute")
-    public Result<ExecutionResponse> executeWorkflow(@PathVariable Long id, @Valid @RequestBody ExecutionRequest request) {
-        Workflow workflow = workflowService.getById(id);
-        if (workflow == null) {
-            return Result.error("工作流不存在");
-        }
+    public Result<ExecutionResponse> executeWorkflow(@RequestAttribute Long userId, @PathVariable Long id,
+                                                      @Valid @RequestBody ExecutionRequest request) {
+        Workflow workflow = workflowService.requireWorkflow(userId, id);
         
         try {
             // 使用引擎选择器选择合适的执行引擎
@@ -80,11 +79,8 @@ public class ExecutionController {
 
     @Operation(summary = "获取工作流最近一次执行记录")
     @GetMapping("/{id}/executions/latest")
-    public Result<ExecutionResponse> getLatestExecution(@PathVariable Long id) {
-        Workflow workflow = workflowService.getById(id);
-        if (workflow == null) {
-            return Result.error("工作流不存在");
-        }
+    public Result<ExecutionResponse> getLatestExecution(@RequestAttribute Long userId, @PathVariable Long id) {
+        workflowService.requireWorkflow(userId, id);
 
         LambdaQueryWrapper<ExecutionRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ExecutionRecord::getFlowId, id)
@@ -109,12 +105,11 @@ public class ExecutionController {
 
     @Operation(summary = "获取执行节点快照")
     @GetMapping("/{id}/executions/{executionId}/snapshots")
-    public Result<List<ExecutionSnapshotResponse>> getExecutionSnapshots(@PathVariable Long id,
+    public Result<List<ExecutionSnapshotResponse>> getExecutionSnapshots(@RequestAttribute Long userId,
+                                                                         @PathVariable Long id,
                                                                          @PathVariable Long executionId) {
-        ExecutionRecord record = executionRecordMapper.selectById(executionId);
-        if (record == null || !id.equals(record.getFlowId())) {
-            return Result.error("执行记录不存在");
-        }
+        workflowService.requireWorkflow(userId, id);
+        requireExecution(id, executionId);
 
         List<ExecutionSnapshot> snapshots = executionSnapshotMapper.selectByExecutionId(executionId);
         List<ExecutionSnapshotResponse> responses = new ArrayList<>();
@@ -126,12 +121,11 @@ public class ExecutionController {
 
     @Operation(summary = "获取执行变量")
     @GetMapping("/{id}/executions/{executionId}/variables")
-    public Result<List<ExecutionVariableResponse>> getExecutionVariables(@PathVariable Long id,
+    public Result<List<ExecutionVariableResponse>> getExecutionVariables(@RequestAttribute Long userId,
+                                                                         @PathVariable Long id,
                                                                          @PathVariable Long executionId) {
-        ExecutionRecord record = executionRecordMapper.selectById(executionId);
-        if (record == null || !id.equals(record.getFlowId())) {
-            return Result.error("执行记录不存在");
-        }
+        workflowService.requireWorkflow(userId, id);
+        requireExecution(id, executionId);
 
         List<ExecutionVariable> variables = executionVariableMapper.selectByExecutionId(executionId);
         List<ExecutionVariableResponse> responses = new ArrayList<>();
@@ -143,13 +137,12 @@ public class ExecutionController {
 
     @Operation(summary = "从断点继续执行工作流")
     @PostMapping("/{id}/executions/{executionId}/resume")
-    public Result<ExecutionResponse> resumeExecution(@PathVariable Long id,
+    public Result<ExecutionResponse> resumeExecution(@RequestAttribute Long userId,
+                                                     @PathVariable Long id,
                                                      @PathVariable Long executionId,
                                                      @RequestBody(required = false) ResumeExecutionRequest request) {
-        Workflow workflow = workflowService.getById(id);
-        if (workflow == null) {
-            return Result.error("工作流不存在");
-        }
+        Workflow workflow = workflowService.requireWorkflow(userId, id);
+        requireExecution(id, executionId);
 
         try {
             WorkflowExecutor executor = engineSelector.selectEngine(workflow);
@@ -166,7 +159,9 @@ public class ExecutionController {
     
     @Operation(summary = "实时执行工作流(SSE)")
     @GetMapping(value = "/{id}/execute/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter executeWorkflowStream(@PathVariable Long id, @RequestParam String inputData) {
+    public SseEmitter executeWorkflowStream(@RequestAttribute Long userId, @PathVariable Long id,
+                                            @RequestParam String inputData) {
+        Workflow workflow = workflowService.requireWorkflow(userId, id);
         SseEmitter emitter = new SseEmitter(300000L);
         String emitterId = id + "_" + System.currentTimeMillis();
         emitters.put(emitterId, emitter);
@@ -188,15 +183,6 @@ public class ExecutionController {
         
         new Thread(() -> {
             try {
-                Workflow workflow = workflowService.getById(id);
-                if (workflow == null) {
-                    emitter.send(SseEmitter.event()
-                            .name("ERROR")
-                            .data(ExecutionEvent.workflowComplete("FAILED", "工作流不存在", 0)));
-                    emitter.complete();
-                    return;
-                }
-                
                 // 使用引擎选择器选择合适的执行引擎
                 WorkflowExecutor executor = engineSelector.selectEngine(workflow);
                 executor.executeWithCallback(workflow, inputData, eventCallback);
@@ -228,6 +214,14 @@ public class ExecutionController {
             log.warn("解析执行节点结果失败", e);
             return Collections.emptyList();
         }
+    }
+
+    private ExecutionRecord requireExecution(Long flowId, Long executionId) {
+        ExecutionRecord record = executionRecordMapper.selectById(executionId);
+        if (record == null || !flowId.equals(record.getFlowId())) {
+            throw new ResourceNotFoundException("执行记录不存在");
+        }
+        return record;
     }
 
     private ExecutionSnapshotResponse toSnapshotResponse(ExecutionSnapshot snapshot) {

@@ -68,7 +68,7 @@ public class LangGraphWorkflowEngine implements WorkflowExecutor {
             }
             
             // 1. 解析工作流配置
-            WorkflowConfig config = workflowConfigParser.parse(workflow.getFlowData());
+            WorkflowConfig config = workflowConfigParser.parse(workflow.getFlowData(), workflow.getOwnerId());
             log.info("工作流配置解析完成: 节点数={}, 边数={}", 
                 config.getNodes().size(), config.getEdges().size());
             

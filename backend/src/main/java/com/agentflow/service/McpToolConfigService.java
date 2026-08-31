@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.agentflow.dto.AgentPlanWebSearchMcpRequest;
 import com.agentflow.dto.McpToolConfigRequest;
 import com.agentflow.entity.McpToolConfig;
+import com.agentflow.common.ResourceNotFoundException;
 import com.agentflow.mapper.McpToolConfigMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,8 +36,9 @@ public class McpToolConfigService extends ServiceImpl<McpToolConfigMapper, McpTo
         this.searchInfinityMcpClient = searchInfinityMcpClient;
     }
 
-    public List<Map<String, Object>> listConfigs() {
+    public List<Map<String, Object>> listConfigs(Long ownerId) {
         return this.list(new LambdaQueryWrapper<McpToolConfig>()
+                        .eq(McpToolConfig::getOwnerId, ownerId)
                         .orderByDesc(McpToolConfig::getUpdatedAt))
                 .stream()
                 .map(this::toSafeMap)
@@ -44,8 +46,9 @@ public class McpToolConfigService extends ServiceImpl<McpToolConfigMapper, McpTo
     }
 
     @Transactional
-    public Map<String, Object> createConfig(McpToolConfigRequest request) {
+    public Map<String, Object> createConfig(Long ownerId, McpToolConfigRequest request) {
         McpToolConfig config = new McpToolConfig();
+        config.setOwnerId(ownerId);
         applyRequest(config, request);
         config.setPreset(0);
         this.save(config);
@@ -53,8 +56,9 @@ public class McpToolConfigService extends ServiceImpl<McpToolConfigMapper, McpTo
     }
 
     @Transactional
-    public Map<String, Object> createAgentPlanWebSearch(AgentPlanWebSearchMcpRequest request) {
+    public Map<String, Object> createAgentPlanWebSearch(Long ownerId, AgentPlanWebSearchMcpRequest request) {
         McpToolConfig config = new McpToolConfig();
+        config.setOwnerId(ownerId);
         config.setName(firstText(request.getName(), "Agent Plan 联网搜索"));
         config.setDescription(firstText(request.getDescription(), "通过火山 Agent Plan Harness MCP 使用联网搜索额度"));
         config.setToolType(AGENT_PLAN_WEB_SEARCH);
@@ -74,45 +78,62 @@ public class McpToolConfigService extends ServiceImpl<McpToolConfigMapper, McpTo
     }
 
     @Transactional
-    public Map<String, Object> updateConfig(Long id, McpToolConfigRequest request) {
-        McpToolConfig config = requireConfig(id);
+    public Map<String, Object> updateConfig(Long ownerId, Long id, McpToolConfigRequest request) {
+        McpToolConfig config = requireConfig(ownerId, id);
         applyRequest(config, request);
         this.updateById(config);
         return toSafeMap(config);
     }
 
     @Transactional
-    public void deleteConfig(Long id) {
-        this.removeById(id);
+    public void deleteConfig(Long ownerId, Long id) {
+        this.removeById(requireConfig(ownerId, id).getId());
     }
 
-    public McpToolConfig requireConfig(Long id) {
-        McpToolConfig config = this.getById(id);
+    public McpToolConfig requireConfig(Long ownerId, Long id) {
+        McpToolConfig config = this.getOne(new LambdaQueryWrapper<McpToolConfig>()
+                .eq(McpToolConfig::getOwnerId, ownerId)
+                .eq(McpToolConfig::getId, id));
         if (config == null) {
-            throw new IllegalArgumentException("MCP 工具不存在");
+            throw new ResourceNotFoundException("MCP 工具不存在");
         }
         return config;
     }
 
-    public List<McpToolConfig> resolveEnabledConfigs(Object rawIds) {
+    public List<McpToolConfig> resolveEnabledConfigs(Long ownerId, Object rawIds) {
         List<Long> ids = parseIds(rawIds);
         if (ids.isEmpty()) {
             return List.of();
         }
-        return this.listByIds(ids).stream()
+        return this.list(new LambdaQueryWrapper<McpToolConfig>()
+                        .eq(McpToolConfig::getOwnerId, ownerId)
+                        .in(McpToolConfig::getId, ids)).stream()
                 .filter(config -> config.getEnabled() != null && config.getEnabled() == 1)
                 .toList();
     }
 
-    public McpToolConfig resolveFirstEnabledWebSearch(Object rawIds) {
-        return resolveEnabledConfigs(rawIds).stream()
+    public void requireOwnedConfigs(Long ownerId, Object rawIds) {
+        List<Long> ids = parseIds(rawIds).stream().distinct().toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        long count = this.count(new LambdaQueryWrapper<McpToolConfig>()
+                .eq(McpToolConfig::getOwnerId, ownerId)
+                .in(McpToolConfig::getId, ids));
+        if (count != ids.size()) {
+            throw new ResourceNotFoundException("MCP 工具不存在");
+        }
+    }
+
+    public McpToolConfig resolveFirstEnabledWebSearch(Long ownerId, Object rawIds) {
+        return resolveEnabledConfigs(ownerId, rawIds).stream()
                 .filter(config -> WEB_SEARCH_TOOL_NAME.equals(config.getToolName()))
                 .findFirst()
                 .orElse(null);
     }
 
-    public Map<String, Object> testConfig(Long id, String query) throws Exception {
-        McpToolConfig config = requireConfig(id);
+    public Map<String, Object> testConfig(Long ownerId, Long id, String query) throws Exception {
+        McpToolConfig config = requireConfig(ownerId, id);
         if (!WEB_SEARCH_TOOL_NAME.equals(config.getToolName())) {
             throw new IllegalArgumentException("当前只支持测试 web_search MCP 工具");
         }

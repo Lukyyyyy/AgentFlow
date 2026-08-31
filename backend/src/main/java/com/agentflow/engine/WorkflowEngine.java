@@ -57,7 +57,7 @@ public class WorkflowEngine implements WorkflowExecutor {
     public ExecutionResponse executeWithCallback(Workflow workflow, String inputData, Consumer<ExecutionEvent> eventCallback) {
         long startTime = System.currentTimeMillis();
         
-        WorkflowConfig config = workflowConfigParser.parse(workflow.getFlowData());
+        WorkflowConfig config = workflowConfigParser.parse(workflow.getFlowData(), workflow.getOwnerId());
         List<WorkflowNode> sortedNodes = dagParser.parse(config);
         List<WorkflowEdge> edges = config.getEdges() != null ? config.getEdges() : new ArrayList<>();
         EdgeIndexes indexes = buildEdgeIndexes(edges);
@@ -84,7 +84,7 @@ public class WorkflowEngine implements WorkflowExecutor {
         }
 
         ResumeExecutionRequest resumeRequest = request != null ? request : new ResumeExecutionRequest();
-        WorkflowConfig config = workflowConfigParser.parse(workflow.getFlowData());
+        WorkflowConfig config = workflowConfigParser.parse(workflow.getFlowData(), workflow.getOwnerId());
         List<WorkflowNode> sortedNodes = dagParser.parse(config);
         List<WorkflowEdge> edges = config.getEdges() != null ? config.getEdges() : new ArrayList<>();
         EdgeIndexes indexes = buildEdgeIndexes(edges);

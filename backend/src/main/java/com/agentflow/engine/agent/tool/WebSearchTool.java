@@ -41,7 +41,8 @@ public class WebSearchTool implements AgentTool {
     public Map<String, Object> execute(Map<String, Object> arguments, AgentToolContext context) throws Exception {
         String query = String.valueOf(arguments.getOrDefault("query", ""));
         int limit = arguments.get("limit") instanceof Number number ? number.intValue() : 5;
-        McpToolConfig selectedMcp = mcpToolConfigService.resolveFirstEnabledWebSearch(context.node().getData().get("mcpToolIds"));
+        McpToolConfig selectedMcp = mcpToolConfigService.resolveFirstEnabledWebSearch(
+                context.node().getOwnerId(), context.node().getData().get("mcpToolIds"));
         if (selectedMcp != null) {
             Map<String, Object> result = searchInfinityMcpClient.webSearch(selectedMcp, query, limit, null, null, "web");
             return toOutput(result);

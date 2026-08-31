@@ -51,6 +51,6 @@ public class MemoryRetrieveTool implements AgentTool {
         if (config.apiUrl() != null && config.apiKey() != null && config.model() != null) {
             embedding = agentPlanClient.createEmbedding(config, query);
         }
-        return memoryService.retrieve(query, scope, List.of(), embedding, topK);
+        return memoryService.retrieve(context.node().getOwnerId(), query, scope, List.of(), embedding, topK);
     }
 }

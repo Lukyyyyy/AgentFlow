@@ -52,6 +52,7 @@ public class MemoryWriteTool implements AgentTool {
         if (config.apiUrl() != null && config.apiKey() != null && config.model() != null) {
             embedding = agentPlanClient.createEmbedding(config, content);
         }
-        return memoryService.write(content, memoryType, scope, memoryService.splitTags(tagsText), context.node().getId(), embedding, config.model());
+        return memoryService.write(context.node().getOwnerId(), content, memoryType, scope,
+                memoryService.splitTags(tagsText), context.node().getId(), embedding, config.model());
     }
 }
