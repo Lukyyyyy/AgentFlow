@@ -151,6 +151,7 @@ const LoginPage = () => {
                       <Input
                         prefix={<MailOutlined />}
                         placeholder="邮箱"
+                        autoComplete="email"
                       />
                     </Form.Item>
 
@@ -161,6 +162,7 @@ const LoginPage = () => {
                       <Input.Password
                         prefix={<LockOutlined />}
                         placeholder="密码"
+                        autoComplete="current-password"
                       />
                     </Form.Item>
 
@@ -195,7 +197,11 @@ const LoginPage = () => {
                         { type: 'email', message: '邮箱格式不正确' },
                       ]}
                     >
-                      <Input prefix={<MailOutlined />} placeholder="邮箱" />
+                      <Input
+                        prefix={<MailOutlined />}
+                        placeholder="邮箱"
+                        autoComplete="email"
+                      />
                     </Form.Item>
 
                     <Form.Item
@@ -209,6 +215,8 @@ const LoginPage = () => {
                         prefix={<SafetyOutlined />}
                         placeholder="邮箱验证码"
                         maxLength={6}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
                         suffix={
                           <Button
                             type="link"
@@ -231,7 +239,11 @@ const LoginPage = () => {
                         { min: 8, message: '密码至少 8 个字符' },
                       ]}
                     >
-                      <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+                      <Input.Password
+                        prefix={<LockOutlined />}
+                        placeholder="密码"
+                        autoComplete="new-password"
+                      />
                     </Form.Item>
 
                     <Form.Item
@@ -249,7 +261,11 @@ const LoginPage = () => {
                         }),
                       ]}
                     >
-                      <Input.Password prefix={<LockOutlined />} placeholder="确认密码" />
+                      <Input.Password
+                        prefix={<LockOutlined />}
+                        placeholder="确认密码"
+                        autoComplete="new-password"
+                      />
                     </Form.Item>
 
                     <Form.Item className="login-submit-row">

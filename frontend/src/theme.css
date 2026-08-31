@@ -227,8 +227,7 @@ body {
 .login-form .ant-input:-webkit-autofill:active {
   -webkit-text-fill-color: var(--af-text) !important;
   caret-color: var(--af-primary);
-  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
-  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-background-clip: text;
   transition: background-color 9999s ease-out 0s;
 }
 
