@@ -1,6 +1,8 @@
 package com.agentflow.config;
 
+import com.agentflow.common.PasswordUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -14,6 +16,15 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(0)
 public class SchemaMigrationRunner implements ApplicationRunner {
+
+    @Value("${agentflow.default-username:}")
+    private String defaultUsername;
+
+    @Value("${agentflow.default-password:}")
+    private String defaultPassword;
+
+    @Value("${agentflow.default-email:}")
+    private String defaultEmail;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -36,6 +47,7 @@ public class SchemaMigrationRunner implements ApplicationRunner {
                     UNIQUE KEY uk_user_email (email)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表'
                 """);
+        createDefaultUserIfMissing();
         createTableIfMissing("knowledge_base", """
                 CREATE TABLE knowledge_base (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '知识库 ID',
@@ -190,6 +202,31 @@ public class SchemaMigrationRunner implements ApplicationRunner {
                 "ALTER TABLE knowledge_chunk ADD COLUMN status VARCHAR(30) DEFAULT 'READY' COMMENT '状态' AFTER embedding");
         addColumnIfMissing("knowledge_chunk", "char_count",
                 "ALTER TABLE knowledge_chunk ADD COLUMN char_count INT DEFAULT 0 COMMENT '字符数' AFTER status");
+    }
+
+    private void createDefaultUserIfMissing() {
+        String email = defaultEmail == null ? "" : defaultEmail.trim().toLowerCase();
+        if (email.isEmpty() || defaultPassword == null || defaultPassword.isEmpty()) {
+            return;
+        }
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user WHERE email = ?", Integer.class, email);
+        if (count != null && count > 0) {
+            return;
+        }
+        String username = defaultUsername == null ? "" : defaultUsername.trim();
+        if (username.isEmpty()) {
+            throw new IllegalStateException("APP_AUTH_DEFAULT_USERNAME 不能为空");
+        }
+        Integer usernameCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user WHERE username = ?", Integer.class, username);
+        if (usernameCount != null && usernameCount > 0) {
+            throw new IllegalStateException("默认账户用户名已被其他邮箱占用: " + username);
+        }
+        jdbcTemplate.update(
+                "INSERT INTO user (username, email, password_hash) VALUES (?, ?, ?)",
+                username, email, PasswordUtil.encode(defaultPassword));
+        log.info("Schema migrated: created configured default user {}", email);
     }
 
     private void createTableIfMissing(String tableName, String ddl) {

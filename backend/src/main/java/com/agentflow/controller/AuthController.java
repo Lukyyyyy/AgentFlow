@@ -39,7 +39,7 @@ public class AuthController {
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthService.AuthTokens tokens = authService.login(request.getEmail(), request.getPassword());
         if (tokens != null) {
-            LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.username(), tokens.email());
+            LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.userId(), tokens.username(), tokens.email());
             LoginResponse response = new LoginResponse(tokens.accessToken(), tokens.refreshToken(), userInfo);
             return Result.success(response);
         }
@@ -64,7 +64,7 @@ public class AuthController {
             String username = registrationService.register(
                     request.getEmail(), request.getVerificationCode(), request.getPassword());
             AuthService.AuthTokens tokens = authService.issueTokens(username);
-            LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(username, tokens.email());
+            LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.userId(), username, tokens.email());
             return Result.success(new LoginResponse(tokens.accessToken(), tokens.refreshToken(), userInfo));
         } catch (BizException e) {
             return Result.error(e.getCode(), e.getMessage());
@@ -90,7 +90,7 @@ public class AuthController {
             return Result.unauthorized("Refresh Token 无效或已过期");
         }
 
-        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.username(), tokens.email());
+        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(tokens.userId(), tokens.username(), tokens.email());
         return Result.success(new LoginResponse(tokens.accessToken(), tokens.refreshToken(), userInfo));
     }
     
@@ -101,8 +101,10 @@ public class AuthController {
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
             String username = authService.getUsernameByToken(token);
-            if (username != null) {
-                return Result.success(new LoginResponse.UserInfo(username, authService.getEmailByUsername(username)));
+            Long userId = authService.getUserIdByToken(token);
+            if (username != null && userId != null) {
+                return Result.success(new LoginResponse.UserInfo(
+                        userId, username, authService.getEmailByUsername(username)));
             }
         }
         return Result.unauthorized("未认证");

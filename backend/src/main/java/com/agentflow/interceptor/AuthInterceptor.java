@@ -39,6 +39,14 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         
         String username = authService.getUsernameByToken(token);
+        Long userId = authService.getUserIdByToken(token);
+        if (userId == null) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"code\":401,\"message\":\"登录凭证已升级，请重新登录\"}");
+            return false;
+        }
+        request.setAttribute("userId", userId);
         request.setAttribute("username", username);
         
         return true;

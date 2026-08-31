@@ -28,6 +28,8 @@ public class LoginResponse {
     @Data
     @AllArgsConstructor
     public static class UserInfo {
+        private Long id;
+
         private String username;
 
         /**

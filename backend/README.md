@@ -35,4 +35,4 @@ cp .env.example .env
 
 ## 配置
 
-配置模板见 [`.env.example`](.env.example)。生产环境必须显式设置数据库密码、强随机 `JWT_SECRET`，并关闭或修改默认管理员账户。
+配置模板见 [`.env.example`](.env.example)。生产环境必须显式设置数据库密码、强随机 `JWT_SECRET`，并关闭或配置默认普通账户。

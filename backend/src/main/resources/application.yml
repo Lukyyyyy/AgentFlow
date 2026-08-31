@@ -90,9 +90,7 @@ agentflow:
     jwt-secret: ${JWT_SECRET:}
     access-token-expiration-minutes: 120
     refresh-token-expiration-hours: 168
-  # 默认管理员账户（生产环境必须修改或禁用）
-  # 通过环境变量 APP_AUTH_DEFAULT_EMAIL 和 APP_AUTH_DEFAULT_PASSWORD 配置
-  # 登录仅支持邮箱，默认账户使用 default-email 匹配；留空则禁用默认账户，必须通过注册功能创建账户
+  # 默认普通账户（首次启动时写入 user 表；留空则只能通过邮箱验证注册）
   default-username: ${APP_AUTH_DEFAULT_USERNAME:admin}
   default-password: ${APP_AUTH_DEFAULT_PASSWORD:admin123}
   default-email: ${APP_AUTH_DEFAULT_EMAIL:admin@example.com}

@@ -86,7 +86,7 @@ MYSQL_PASSWORD=your_mysql_password
 JWT_SECRET=replace_with_a_random_secret_of_at_least_32_characters
 ```
 
-生产环境还应修改或禁用默认管理员账户，并为所需模型、Redis 和 MinIO 配置正式凭据。
+生产环境还应配置或禁用默认普通账户，并为所需模型、Redis 和 MinIO 配置正式凭据。
 
 ### 4. 一键启动
 
@@ -102,7 +102,7 @@ chmod +x start.sh
 - Web 工作台：[http://localhost:5173](http://localhost:5173)
 - Swagger UI：[http://localhost:8084/swagger-ui.html](http://localhost:8084/swagger-ui.html)
 
-本地默认账户为 `admin / admin123`，仅用于开发环境。
+登录仅支持邮箱。首次启动会把 `.env` 中的默认账户写入 `user` 表；也可以通过邮箱验证码注册。
 
 ### 分别启动
 
@@ -170,8 +170,9 @@ npm run build
 | `MYSQL_USERNAME` | `root` | 数据库用户 |
 | `MYSQL_PASSWORD` | 无 | 数据库密码 |
 | `JWT_SECRET` | 开发时临时生成 | 生产环境必须显式配置 |
-| `APP_AUTH_DEFAULT_USERNAME` | `admin` | 默认管理员用户名，留空可禁用 |
-| `APP_AUTH_DEFAULT_PASSWORD` | `admin123` | 默认管理员密码 |
+| `APP_AUTH_DEFAULT_USERNAME` | `admin` | 默认普通账户内部用户名 |
+| `APP_AUTH_DEFAULT_EMAIL` | `admin@example.com` | 默认普通账户登录邮箱，留空可禁用 |
+| `APP_AUTH_DEFAULT_PASSWORD` | `admin123` | 默认普通账户首次创建密码 |
 | `VITE_API_BASE_URL` | `/api` | 前端 API 基地址 |
 | `VITE_API_PROXY_TARGET` | `http://localhost:8084` | Vite 本地代理目标 |
 
@@ -188,7 +189,7 @@ npm run build
 ## 安全提示
 
 - 不要提交 `.env`、模型密钥、数据库密码或 JWT 密钥。
-- 生产环境必须更换默认管理员账户并使用高强度 `JWT_SECRET`。
+- 生产环境必须更换或禁用默认账户并使用高强度 `JWT_SECRET`。
 - 对外开放前应配置 HTTPS、限流、审计日志和最小权限网络策略。
 - 工作流中的自定义代码、网页访问和 MCP 工具应在受控环境中运行。
 

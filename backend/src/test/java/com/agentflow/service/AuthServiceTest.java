@@ -1,6 +1,8 @@
 package com.agentflow.service;
 
 import com.agentflow.config.JwtSecretProvider;
+import com.agentflow.common.PasswordUtil;
+import com.agentflow.entity.User;
 import com.agentflow.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -33,6 +35,7 @@ class AuthServiceTest {
         assertNotNull(tokens.accessToken());
         assertNotNull(tokens.refreshToken());
         assertEquals(DEFAULT_EMAIL, tokens.email());
+        assertEquals(7L, tokens.userId());
         assertTrue(authService.validateToken(tokens.accessToken()));
         assertEquals(DEFAULT_USERNAME, authService.getUsernameByToken(tokens.accessToken()));
     }
@@ -63,13 +66,17 @@ class AuthServiceTest {
 
     @Test
     void shouldRejectUsernameLogin() {
-        AuthService authService = createAuthService(new HashMap<>());
+        AuthService authService = createAuthService(new HashMap<>(), false);
 
         // 仅支持邮箱登录：使用用户名即使密码正确也应拒绝
         assertNull(authService.login(DEFAULT_USERNAME, DEFAULT_PASSWORD));
     }
 
     private AuthService createAuthService(Map<String, String> redisStore) {
+        return createAuthService(redisStore, true);
+    }
+
+    private AuthService createAuthService(Map<String, String> redisStore, boolean userExists) {
         AuthService authService = new AuthService();
         JwtSecretProvider jwtSecretProvider = mock(JwtSecretProvider.class);
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
@@ -79,7 +86,12 @@ class AuthServiceTest {
 
         when(jwtSecretProvider.getSecret()).thenReturn(JWT_SECRET);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(userMapper.selectOne(any())).thenReturn(null);
+        User user = new User();
+        user.setId(7L);
+        user.setUsername(DEFAULT_USERNAME);
+        user.setEmail(DEFAULT_EMAIL);
+        user.setPasswordHash(PasswordUtil.encode(DEFAULT_PASSWORD));
+        when(userMapper.selectOne(any())).thenReturn(userExists ? user : null);
         doAnswer(invocation -> {
             redisStore.put(invocation.getArgument(0), invocation.getArgument(1));
             return null;
@@ -90,9 +102,6 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(authService, "jwtSecretProvider", jwtSecretProvider);
         ReflectionTestUtils.setField(authService, "accessTokenExpirationMinutes", 120L);
         ReflectionTestUtils.setField(authService, "refreshTokenExpirationHours", 168L);
-        ReflectionTestUtils.setField(authService, "defaultUsername", DEFAULT_USERNAME);
-        ReflectionTestUtils.setField(authService, "defaultPassword", DEFAULT_PASSWORD);
-        ReflectionTestUtils.setField(authService, "defaultEmail", DEFAULT_EMAIL);
         ReflectionTestUtils.setField(authService, "stringRedisTemplate", redisTemplate);
         ReflectionTestUtils.setField(authService, "userMapper", userMapper);
         return authService;

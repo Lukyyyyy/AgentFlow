@@ -64,11 +64,11 @@ public class ConfigValidationRunner implements ApplicationRunner {
     private String defaultPassword;
 
     /**
-     * 校验默认管理员账户配置
+     * 校验默认普通账户配置
      */
     private void validateDefaultCredentials() {
         if (defaultUsername == null || defaultPassword == null) {
-            log.info("ℹ️  未配置默认管理员账户（生产环境建议）");
+            log.info("ℹ️  未配置默认账户");
             return;
         }
 
@@ -76,14 +76,14 @@ public class ConfigValidationRunner implements ApplicationRunner {
         String trimmedPassword = defaultPassword.trim();
 
         if (trimmedUsername.isEmpty() && trimmedPassword.isEmpty()) {
-            log.info("ℹ️  默认管理员账户已禁用");
+            log.info("ℹ️  默认账户已禁用");
             return;
         }
 
         // 检查弱密码
         if (trimmedPassword.length() < 8) {
             log.warn("==========================================");
-            log.warn("⚠️  默认管理员密码过弱！");
+            log.warn("⚠️  默认账户密码过弱！");
             log.warn("   当前密码长度: {} 字符（建议至少 8 字符）", trimmedPassword.length());
             log.warn("   生产环境必须使用强密码！");
             log.warn("   建议：不配置默认账户，或使用强密码");
@@ -93,12 +93,11 @@ public class ConfigValidationRunner implements ApplicationRunner {
         // 检查是否为常见默认值
         if ("admin".equals(trimmedUsername) && ("admin".equals(trimmedPassword) || "123".equals(trimmedPassword) || "123456".equals(trimmedPassword))) {
             log.warn("==========================================");
-            log.warn("⚠️  使用了默认管理员账户的弱密码！");
-            log.warn("   检测到: {}/{}", trimmedUsername, trimmedPassword);
+            log.warn("⚠️  使用了默认账户的弱密码！");
             log.warn("   生产环境必须修改！");
             log.warn("==========================================");
         } else {
-            log.info("✅ 默认管理员账户已配置");
+            log.info("✅ 默认账户已配置");
         }
     }
 
