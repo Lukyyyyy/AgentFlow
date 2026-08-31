@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/public/agentflow.svg?v=3" width="92" alt="AgentFlow Logo" />
+  <img src="frontend/public/agentflow-logo.svg" width="92" alt="AgentFlow Logo" />
   <h1>AgentFlow</h1>
   <p><strong>把模型、工具与知识连接成可运行的 AI 工作流</strong></p>
   <p>可视化编排 · 双执行引擎 · 实时调试 · 企业知识库 · MCP 工具</p>

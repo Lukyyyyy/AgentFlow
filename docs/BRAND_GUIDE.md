@@ -7,7 +7,7 @@ AgentFlow 表达“智能体沿着可观察、可控制的路径协同运行”�
 ## Logo
 
 - 产品内使用 `frontend/src/components/BrandLogo.tsx`。
-- 浏览器图标使用 `frontend/public/agentflow.svg`。
+- 浏览器图标使用 `frontend/public/agentflow-logo.svg`。
 - 图像生成探索稿保存在 `frontend/src/assets/brand/agentflow-mark.png`，矢量版本是产品主标志。
 - 标志四周至少保留一个节点直径的安全空间；小于 28px 时只展示图形标。
 
