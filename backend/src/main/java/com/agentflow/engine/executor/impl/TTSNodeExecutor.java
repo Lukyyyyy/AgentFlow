@@ -359,21 +359,18 @@ public class TTSNodeExecutor implements NodeExecutor {
         
         if (inputParams != null && !inputParams.isEmpty()) {
             for (Map<String, Object> param : inputParams) {
-                String paramName = (String) param.get("name");
-                if ("text".equals(paramName)) {
-                    String type = (String) param.get("type");
-                    if ("input".equals(type)) {
-                        return (String) param.get("value");
-                    } else if ("reference".equals(type)) {
-                        String referenceNode = (String) param.get("referenceNode");
-                        if (StringUtils.hasText(referenceNode)) {
-                            String[] parts = referenceNode.split("\\.");
-                            if (parts.length == 2) {
-                                String paramKey = parts[1];
-                                Object value = input.get(paramKey);
-                                if (value instanceof String) {
-                                    return (String) value;
-                                }
+                String type = (String) param.get("type");
+                if ("input".equals(type)) {
+                    return (String) param.get("value");
+                } else if ("reference".equals(type)) {
+                    String referenceNode = (String) param.get("referenceNode");
+                    if (StringUtils.hasText(referenceNode)) {
+                        String[] parts = referenceNode.split("\\.");
+                        if (parts.length == 2) {
+                            String paramKey = parts[1];
+                            Object value = input.get(paramKey);
+                            if (value instanceof String) {
+                                return (String) value;
                             }
                         }
                     }
