@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.net.URI;
 import java.net.URL;
 
 @Slf4j
@@ -66,7 +67,7 @@ public class MinioService {
         
         log.info("文件上传成功到 MinIO: {}", objectName);
         
-        return minioClient.getPresignedObjectUrl(
+        String signedUrl = minioClient.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
                         .method(Method.GET)
                         .bucket(minioConfig.getBucketName())
@@ -74,6 +75,24 @@ public class MinioService {
                         .expiry(minioConfig.getPresignedUrlExpirySeconds())
                         .build()
         );
+        return toPublicUrl(signedUrl);
+    }
+
+    // 代理必须还原签名时的 Host 和对象路径，查询参数不能重新编码。
+    String toPublicUrl(String signedUrl) {
+        String publicUrl = minioConfig.getPublicUrl();
+        if (publicUrl == null || publicUrl.isBlank()) {
+            return signedUrl;
+        }
+        URI base = URI.create(publicUrl.trim());
+        if (!("http".equalsIgnoreCase(base.getScheme()) || "https".equalsIgnoreCase(base.getScheme()))
+                || base.getHost() == null || base.getRawUserInfo() != null
+                || base.getRawQuery() != null || base.getRawFragment() != null) {
+            throw new IllegalArgumentException("MINIO_PUBLIC_URL 必须是完整的 HTTP(S) 地址，不能包含凭据、查询参数或片段");
+        }
+        URI signed = URI.create(signedUrl);
+        return base.toString().replaceAll("/+$", "") + signed.getRawPath()
+                + "?" + signed.getRawQuery();
     }
     
     /**

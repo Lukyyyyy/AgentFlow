@@ -99,6 +99,29 @@ location /api/ {
 }
 ```
 
+## 音频、图片和视频的外部访问
+
+后端通过 `MINIO_ENDPOINT=http://minio:9000` 上传并签名，使用 `MINIO_PUBLIC_URL` 生成完整的对外链接。前端 Nginx 的 `/media/` 代理会去掉前缀，并将 Host 还原为 `minio:9000`，保留签名校验。代理仅开放 GET/HEAD，支持播放器 Range 请求，无需将桶设为公开。
+
+在根目录 `.env` 中设置：
+
+```dotenv
+# 本地 Docker（默认）
+MINIO_PUBLIC_URL=http://localhost:5173/media
+# 服务器：用实际可从外部访问的网站地址替换上面的值
+# MINIO_PUBLIC_URL=https://app.example.com/media
+```
+
+公网入口需将 `/media/` 原样转发给前端容器（上面的 `location /` 已覆盖）。如另有登录网关，也需允许持签名链接的外部客户端访问此路径。不要直接把内部签名链接的域名替换成 MinIO 公网地址，绕过还原 Host 的代理会导致签名失效。
+
+```bash
+sudo docker compose up -d --build backend frontend
+```
+
+音频、图片和视频节点共用此文件上传服务，成功转存到 MinIO 后均返回完整公网链接。重新生成媒体后，将完整链接交给外部服务即可。可在另一台机器用 `curl -f --range 0-1023 '完整媒体链接' -o /tmp/audio-part` 验证，URL 需加引号以保留查询参数。签名默认有效期为 7 天（`MINIO_PRESIGNED_URL_EXPIRY_SECONDS=604800`），过期需重新生成签名；历史运行结果中的旧链接不会自动更新。
+
+本地独立启动前后端时，默认 `MINIO_ENDPOINT` 和 `MINIO_PUBLIC_URL` 均为 `http://localhost:9000`，维持原有直连方式。也可将后端 `MINIO_PUBLIC_URL` 改为 `http://localhost:5173/media`，使用 Vite 媒体代理；`VITE_MINIO_PROXY_TARGET` 必须与后端 `MINIO_ENDPOINT` 一致。`localhost` 链接仅供本机访问，交给外部服务时必须配置可达的公网入口。
+
 ## 常用命令
 
 ```bash
