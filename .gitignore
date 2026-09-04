@@ -3,6 +3,8 @@
 .env.local
 .env.*.local
 !.env.example
+!.env.docker.example
+/backups/
 
 # Dependencies and build output
 node_modules/
