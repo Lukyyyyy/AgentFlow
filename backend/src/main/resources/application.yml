@@ -108,5 +108,7 @@ agentflow:
       from-address: ${TENCENT_SES_FROM_ADDRESS:}
       # 已审核通过的验证码模板 ID（发信模板列表中查看）
       verification-template-id: ${TENCENT_SES_VERIFICATION_TEMPLATE_ID:0}
+      # 已审核通过的邮件服务测试模板 ID（预留给管理员测试，不用于公开注册）
+      test-template-id: ${TENCENT_SES_TEST_TEMPLATE_ID:0}
   skills:
     path: skills
