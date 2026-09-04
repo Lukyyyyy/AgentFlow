@@ -2,6 +2,7 @@
 CREATE DATABASE IF NOT EXISTS agentflow DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE agentflow;
+SET NAMES utf8mb4;
 
 -- 工作流表
 CREATE TABLE IF NOT EXISTS workflow (
