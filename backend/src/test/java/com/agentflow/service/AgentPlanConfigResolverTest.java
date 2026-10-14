@@ -8,10 +8,47 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AgentPlanConfigResolverTest {
+
+    @Test
+    void resolveKnowledgeConfig_UsesSelectedQwenEmbeddingModel() {
+        LLMGlobalConfigService service = mock(LLMGlobalConfigService.class);
+        LLMGlobalConfig config = new LLMGlobalConfig();
+        config.setId(12L);
+        config.setProvider("qwen");
+        config.setModel("chat-model");
+        config.setEmbeddingModel("text-embedding-v4");
+        config.setApiUrl("https://example.test/compatible-mode");
+        config.setApiKey("test-key");
+        when(service.requireConfig(7L, 12L)).thenReturn(config);
+
+        ResolvedAgentPlanConfig resolved = new AgentPlanConfigResolver(service).resolveKnowledgeConfig(7L, 12L, null);
+
+        assertEquals("qwen", resolved.provider());
+        assertEquals("text-embedding-v4", resolved.model());
+        assertEquals(config.getApiUrl(), resolved.apiUrl());
+        assertEquals("test-key", resolved.apiKey());
+    }
+
+    @Test
+    void resolveKnowledgeConfig_DoesNotInventAnUnconfiguredModel() {
+        AgentPlanConfigResolver resolver = new AgentPlanConfigResolver(mock(LLMGlobalConfigService.class));
+        ResolvedAgentPlanConfig resolved = resolver.resolveKnowledgeConfig(7L, null, null);
+
+        assertNull(resolved.model());
+        assertNull(resolved.embeddingModel());
+        assertNull(resolved.apiUrl());
+    }
+
+    @Test
+    void resolveKnowledgeConfig_PreservesExistingKnowledgeBaseModel() {
+        AgentPlanConfigResolver resolver = new AgentPlanConfigResolver(mock(LLMGlobalConfigService.class));
+        assertEquals("existing-model", resolver.resolveKnowledgeConfig(7L, null, "existing-model").model());
+    }
 
     @Test
     void resolveImageConfig_UsesSelectedStepConfig_WhenAgentPlanDefaultExists() {

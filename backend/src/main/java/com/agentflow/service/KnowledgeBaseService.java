@@ -91,13 +91,14 @@ public class KnowledgeBaseService {
 
     @Transactional
     public Map<String, Object> createKnowledgeBase(Long ownerId, KnowledgeBaseRequest request) {
-        configResolver.requireOwnedConfig(ownerId, request.getConfigId());
+        ResolvedAgentPlanConfig config = configResolver.resolveKnowledgeConfig(
+                ownerId, request.getConfigId(), request.getEmbeddingModel());
         KnowledgeBase base = new KnowledgeBase();
         base.setOwnerId(ownerId);
         base.setName(request.getName().trim());
         base.setDescription(trimToNull(request.getDescription()));
         base.setConfigId(request.getConfigId());
-        base.setEmbeddingModel(firstText(request.getEmbeddingModel(), AgentPlanConfigResolver.DEFAULT_EMBEDDING_MODEL));
+        base.setEmbeddingModel(config.embeddingModel());
         base.setChunkSize(normalizeChunkSize(request.getChunkSize()));
         base.setChunkOverlap(normalizeChunkOverlap(request.getChunkOverlap(), base.getChunkSize()));
         base.setStatus("DRAFT");

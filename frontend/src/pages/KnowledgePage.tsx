@@ -18,7 +18,7 @@ import {
   uploadKnowledgeTextFile,
 } from '../api/knowledge';
 import { useLLMConfigStore } from '../store/llmConfigStore';
-import { getProviderLabel, normalizeProviderKey } from '../utils/provider';
+import { getProviderLabel } from '../utils/provider';
 import BrandLogo from '../components/BrandLogo';
 
 const statusColor: Record<string, string> = {
@@ -41,42 +41,9 @@ const statusText: Record<string, string> = {
   FAILED: '失败',
 };
 
-const getAgentPlanConfigLabel = (config: { provider: string; model?: string; embeddingModel?: string; configName?: string }) => {
-  const providerLabel = getProviderLabel(config.provider);
-  const modelName = config.model?.trim() || config.embeddingModel?.trim() || cleanInternalConfigName(config.configName, config.provider);
-
-  return modelName ? `${providerLabel} · ${modelName}` : providerLabel;
-};
-
-const getAgentPlanConfigHint = (config: { embeddingModel?: string; memoryEnabled?: number }) => [
-  config.embeddingModel ? `向量: ${config.embeddingModel}` : '',
-  config.memoryEnabled === 1 ? '记忆已启用' : '',
-].filter(Boolean).join(' / ');
-
-const cleanInternalConfigName = (configName?: string, provider?: string) => {
-  if (!configName) return '';
-
-  let name = configName.trim();
-  const providerPrefixes = [
-    provider,
-    normalizeProviderKey(provider),
-    'volcengine_agent_plan',
-    'agent_plan',
-    'volcengine',
-    'ark',
-  ].filter(Boolean) as string[];
-
-  const matchedPrefix = providerPrefixes.find((prefix) => name.toLowerCase().startsWith(`${prefix.toLowerCase()}-`));
-  if (matchedPrefix) {
-    name = name.slice(matchedPrefix.length + 1);
-  }
-
-  return name.replace(/-\d{10,}$/, '');
-};
-
 const KnowledgePage = () => {
   const navigate = useNavigate();
-  const { configs: llmConfigs, fetchAllConfigs } = useLLMConfigStore();
+  const { configs: llmConfigs, loading: configsLoading, error: configError, fetchAllConfigs } = useLLMConfigStore();
   const [bases, setBases] = useState<KnowledgeBase[]>([]);
   const [selectedBaseId, setSelectedBaseId] = useState<number | null>(null);
   const [selectedBase, setSelectedBase] = useState<KnowledgeBase | null>(null);
@@ -92,10 +59,20 @@ const KnowledgePage = () => {
   const [createForm] = Form.useForm();
   const [importForm] = Form.useForm();
 
-  const agentPlanConfigs = useMemo(
-    () => llmConfigs.filter((config) => normalizeProviderKey(config.provider) === 'volcengine_agent_plan'),
+  const embeddingConfigs = useMemo(
+    () => llmConfigs.filter((config) => config.embeddingModel?.trim()),
     [llmConfigs]
   );
+
+  const selectedConfigId = Form.useWatch('configId', createForm);
+  const selectedEmbeddingConfig = embeddingConfigs.find((config) => config.id === selectedConfigId);
+
+  useEffect(() => {
+    if (!createOpen || configsLoading || configError) return;
+    const currentConfig = embeddingConfigs.find((config) => config.id === createForm.getFieldValue('configId'));
+    const config = currentConfig || embeddingConfigs.find((config) => config.isDefault === 1) || embeddingConfigs[0];
+    createForm.setFieldValue('configId', config?.id);
+  }, [createOpen, configsLoading, configError, embeddingConfigs, createForm]);
 
   useEffect(() => {
     fetchAllConfigs();
@@ -138,7 +115,10 @@ const KnowledgePage = () => {
 
   const handleCreate = async () => {
     const values = await createForm.validateFields();
-    const result = await createKnowledgeBase(values);
+    const result = await createKnowledgeBase({
+      ...values,
+      embeddingModel: selectedEmbeddingConfig?.embeddingModel?.trim(),
+    });
     if (result.code === 200) {
       message.success('知识库创建成功');
       setCreateOpen(false);
@@ -394,9 +374,9 @@ const KnowledgePage = () => {
         </main>
       </div>
 
-      <Modal title="新建知识库" open={createOpen} onOk={handleCreate} onCancel={() => setCreateOpen(false)} width={620}>
+      <Modal title="新建知识库" open={createOpen} onOk={handleCreate} onCancel={() => setCreateOpen(false)} width={620}
+        okButtonProps={{ disabled: configsLoading || !!configError }}>
         <Form form={createForm} layout="vertical" initialValues={{
-          embeddingModel: 'doubao-embedding-vision',
           chunkSize: 800,
           chunkOverlap: 100,
         }}>
@@ -406,23 +386,27 @@ const KnowledgePage = () => {
           <Form.Item name="description" label="知识库描述">
             <Input.TextArea rows={3} maxLength={200} placeholder="说明内容范围、适用工作流和维护规则" />
           </Form.Item>
-          <Form.Item name="configId" label="Agent Plan 配置">
-            <Select allowClear optionLabelProp="label" placeholder="可选。用于建立向量索引">
-              {agentPlanConfigs.map((config) => (
-                <Select.Option key={config.id} value={config.id} label={getAgentPlanConfigLabel(config)}>
-                  <Space direction="vertical" size={0}>
-                    <span>{getAgentPlanConfigLabel(config)}</span>
-                    {getAgentPlanConfigHint(config) && (
-                      <span className="knowledge-muted">{getAgentPlanConfigHint(config)}</span>
-                    )}
-                  </Space>
-                </Select.Option>
-              ))}
-            </Select>
+          <Form.Item name="configId" label="向量模型配置"
+            help={configError
+              ? `模型配置加载失败：${configError}`
+              : !configsLoading && embeddingConfigs.length === 0
+                ? '未配置向量模型，请在模型管理中添加。暂使用文本检索。'
+                : undefined}>
+            <Select
+              allowClear
+              loading={configsLoading}
+              disabled={configsLoading || !!configError || embeddingConfigs.length === 0}
+              placeholder={configsLoading ? '正在加载向量模型' : configError ? '加载失败' : '未配置'}
+              options={embeddingConfigs.map((config) => ({
+                value: config.id,
+                label: `${getProviderLabel(config.provider)} · ${config.embeddingModel?.trim()}`,
+              }))}
+            />
           </Form.Item>
           <Space className="knowledge-form-row" align="start">
-            <Form.Item name="embeddingModel" label="向量模型">
-              <Input placeholder="doubao-embedding-vision" />
+            <Form.Item label="向量模型">
+              <Input readOnly aria-label="向量模型" value={selectedEmbeddingConfig?.embeddingModel?.trim() || ''}
+                placeholder={configsLoading ? '正在加载' : '未配置'} />
             </Form.Item>
             <Form.Item name="chunkSize" label="分片长度">
               <InputNumber min={100} max={4000} />

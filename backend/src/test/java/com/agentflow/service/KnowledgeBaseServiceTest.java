@@ -2,6 +2,8 @@ package com.agentflow.service;
 
 import com.agentflow.entity.KnowledgeBase;
 import com.agentflow.entity.KnowledgeChunk;
+import com.agentflow.dto.KnowledgeBaseRequest;
+import com.agentflow.entity.LLMGlobalConfig;
 import com.agentflow.mapper.KnowledgeBaseMapper;
 import com.agentflow.mapper.KnowledgeChunkMapper;
 import com.agentflow.mapper.KnowledgeDocumentMapper;
@@ -19,6 +21,25 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class KnowledgeBaseServiceTest {
+
+    @Test
+    void shouldSaveSelectedEmbeddingModelAndLeaveUnconfiguredModelEmpty() {
+        LLMGlobalConfigService configs = mock(LLMGlobalConfigService.class);
+        LLMGlobalConfig qwen = new LLMGlobalConfig();
+        qwen.setEmbeddingModel("text-embedding-v4");
+        when(configs.requireConfig(7L, 9L)).thenReturn(qwen);
+        KnowledgeBaseService service = new KnowledgeBaseService(mock(KnowledgeBaseMapper.class),
+                mock(KnowledgeDocumentMapper.class), mock(KnowledgeChunkMapper.class),
+                mock(KnowledgeIndexTaskMapper.class), new AgentPlanConfigResolver(configs),
+                mock(VolcengineAgentPlanClient.class));
+        KnowledgeBaseRequest request = new KnowledgeBaseRequest();
+        request.setName("项目资料");
+        request.setConfigId(9L);
+
+        assertEquals("text-embedding-v4", service.createKnowledgeBase(7L, request).get("embeddingModel"));
+        request.setConfigId(null);
+        assertEquals(null, service.createKnowledgeBase(7L, request).get("embeddingModel"));
+    }
 
     @Test
     void shouldScoreChineseTextMatchesWhenEmbeddingIsUnavailable() {

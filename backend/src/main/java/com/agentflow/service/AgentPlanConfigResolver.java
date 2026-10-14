@@ -156,11 +156,10 @@ public class AgentPlanConfigResolver {
     }
 
     public ResolvedAgentPlanConfig resolveKnowledgeConfig(Long ownerId, Long configId, String modelOverride) {
-        LLMGlobalConfig globalConfig = configId != null ? llmGlobalConfigService.getOwnedById(ownerId, configId) : null;
+        LLMGlobalConfig globalConfig = configId != null ? llmGlobalConfigService.requireConfig(ownerId, configId) : null;
         String embeddingModel = firstText(
                 modelOverride,
-                globalConfig != null ? globalConfig.getEmbeddingModel() : null,
-                DEFAULT_EMBEDDING_MODEL
+                globalConfig != null ? globalConfig.getEmbeddingModel() : null
         );
         return new ResolvedAgentPlanConfig(
                 configId,
@@ -179,12 +178,6 @@ public class AgentPlanConfigResolver {
         if (!StringUtils.hasText(config.apiUrl()) || !StringUtils.hasText(config.apiKey())
                 || !StringUtils.hasText(config.model())) {
             throw new IllegalArgumentException(nodeName + " 节点缺少有效的 Agent Plan 配置，请选择全局配置或填写 API 信息");
-        }
-    }
-
-    public void requireOwnedConfig(Long ownerId, Long configId) {
-        if (configId != null) {
-            llmGlobalConfigService.requireConfig(ownerId, configId);
         }
     }
 

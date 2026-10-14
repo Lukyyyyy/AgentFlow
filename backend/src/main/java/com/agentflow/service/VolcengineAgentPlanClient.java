@@ -29,7 +29,8 @@ public class VolcengineAgentPlanClient {
         request.put("model", config.model());
         request.put("input", input);
 
-        JSONObject response = postJson(config, "/embeddings", request);
+        String path = "volcengine_agent_plan".equals(config.provider()) ? "/embeddings" : "/v1/embeddings";
+        JSONObject response = postJson(config, path, request);
         JSONArray data = response.getJSONArray("data");
         if (data == null || data.isEmpty()) {
             return List.of();
