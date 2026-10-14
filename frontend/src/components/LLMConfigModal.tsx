@@ -12,9 +12,10 @@ import {
   message,
   Popconfirm
 } from 'antd';
+import { isAxiosError } from 'axios';
 import { SettingOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CloseOutlined } from '@ant-design/icons';
 import { useLLMConfigStore } from '../store/llmConfigStore';
-import { LLMGlobalConfig, LLMConfigRequest } from '../api/llmConfig';
+import { LLMGlobalConfig, LLMConfigRequest, testConnection } from '../api/llmConfig';
 import { getProviderLabel, normalizeProviderKey } from '../utils/provider';
 
 const PROVIDERS = [
@@ -53,7 +54,9 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ visible, onClose }) => 
   const [editingConfig, setEditingConfig] = useState<LLMGlobalConfig | null>(null);
   const [activeCapabilities, setActiveCapabilities] = useState<CapabilityKey[]>([]);
   const [capabilityPickerKey, setCapabilityPickerKey] = useState(0);
+  const [testingConnection, setTestingConnection] = useState(false);
   const [form] = Form.useForm();
+  const [messageApi, messageContextHolder] = message.useMessage();
 
   const {
     configs,
@@ -92,7 +95,7 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ visible, onClose }) => 
 
   useEffect(() => {
     if (error) {
-      message.error(error);
+      messageApi.error(error);
       clearError();
     }
   }, [error]);
@@ -161,11 +164,42 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ visible, onClose }) => 
 
       const result = await saveConfig(request);
       if (result) {
-        message.success(editingConfig ? '配置已更新' : '配置已创建');
+        messageApi.success(editingConfig ? '配置已更新' : '配置已创建');
         handleCloseForm();
       }
     } catch (error) {
       console.error('Form validation failed:', error);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    let values;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    setTestingConnection(true);
+    try {
+      const result = await testConnection({
+        provider: normalizeProviderKey(values.provider),
+        apiUrl: values.apiUrl,
+        apiKey: values.apiKey,
+        model: values.model?.trim() || undefined,
+        embeddingModel: hasCapability('embedding') ? values.embeddingModel : undefined,
+        ttsModel: hasCapability('tts') ? values.ttsModel : undefined
+      });
+      if (result.code === 200) {
+        messageApi.success(result.data);
+      } else {
+        messageApi.error(result.message || '测试连接失败');
+      }
+    } catch (error) {
+      messageApi.error(isAxiosError(error) && error.code === 'ECONNABORTED'
+        ? '测试连接超时，请稍后重试'
+        : '测试连接失败，请检查网络或稍后重试');
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -285,7 +319,7 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ visible, onClose }) => 
   const handleDelete = async (id: number) => {
     const success = await deleteConfig(id);
     if (success) {
-      message.success('配置已删除');
+      messageApi.success('配置已删除');
     }
   };
 
@@ -357,6 +391,7 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ visible, onClose }) => 
 
   return (
     <>
+      {messageContextHolder}
       {!visible && (
         <Button
           icon={<SettingOutlined />}
@@ -403,16 +438,23 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ visible, onClose }) => 
           title={editingConfig ? '编辑配置' : '新增配置'}
           open={formVisible}
           onCancel={handleCloseForm}
-          onOk={handleSubmit}
-          confirmLoading={loading}
-          okText="保存"
-          cancelText="取消"
+          closable={!testingConnection}
+          maskClosable={!testingConnection}
+          keyboard={!testingConnection}
+          footer={[
+            <Button key="test" onClick={handleTestConnection} loading={testingConnection} disabled={loading}>
+              测试连接
+            </Button>,
+            <Button key="cancel" onClick={handleCloseForm} disabled={testingConnection}>取消</Button>,
+            <Button key="save" type="primary" onClick={handleSubmit} loading={loading} disabled={testingConnection}>保存</Button>
+          ]}
           width={680}
         >
           <Form
             form={form}
             layout="vertical"
             autoComplete="off"
+            disabled={testingConnection}
           >
             <Form.Item
               name="provider"
@@ -494,6 +536,9 @@ const LLMConfigModal: React.FC<LLMConfigModalProps> = ({ visible, onClose }) => 
                 </div>
               )}
               {activeCapabilities.map(renderCapabilityField)}
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              测试依次优先调用 LLM、向量、TTS 模型；仅有图片或视频能力时验证模型列表接口。模型调用可能产生少量费用。
             </div>
           </Form>
         </Modal>

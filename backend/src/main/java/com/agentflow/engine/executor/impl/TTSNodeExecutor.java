@@ -28,6 +28,9 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import static com.agentflow.service.LLMGlobalConfigService.normalizeDashScopeBaseApiUrl;
+import static com.agentflow.service.LLMGlobalConfigService.normalizeStepSpeechEndpoint;
+
 @Slf4j
 @Component
 public class TTSNodeExecutor implements NodeExecutor {
@@ -454,41 +457,6 @@ public class TTSNodeExecutor implements NodeExecutor {
             }
         }
         return -1;
-    }
-
-    private String normalizeDashScopeBaseApiUrl(String apiUrl) {
-        if (!StringUtils.hasText(apiUrl)) {
-            return null;
-        }
-        String normalized = apiUrl.trim();
-        if (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        normalized = normalized
-                .replace("/services/aigc/multimodal-generation/generation", "")
-                .replace("/compatible-mode/v1", "/api/v1")
-                .replace("/compatible-mode", "/api/v1");
-        if (!normalized.endsWith("/api/v1")) {
-            normalized = normalized + "/api/v1";
-        }
-        return normalized;
-    }
-
-    private String normalizeStepSpeechEndpoint(String apiUrl) {
-        String normalized = StringUtils.hasText(apiUrl) ? apiUrl.trim() : "https://api.stepfun.com/v1";
-        if (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        if (normalized.endsWith("/audio/speech")) {
-            return normalized;
-        }
-        if (normalized.endsWith("/v1")) {
-            return normalized + "/audio/speech";
-        }
-        if (normalized.endsWith("/step_plan/v1")) {
-            return normalized + "/audio/speech";
-        }
-        return normalized + "/v1/audio/speech";
     }
 
     private String canonicalizeProvider(String provider) {

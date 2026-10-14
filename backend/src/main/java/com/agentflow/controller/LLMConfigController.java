@@ -68,6 +68,18 @@ public class LLMConfigController {
         }
     }
 
+    @Operation(summary = "测试当前填写的模型配置连接，不保存配置")
+    @PostMapping("/test")
+    public Result<String> testConnection(@RequestAttribute Long userId, @RequestBody LLMGlobalConfig config) {
+        try {
+            return Result.success(llmGlobalConfigService.testConnection(config));
+        } catch (IllegalArgumentException e) {
+            return Result.error("测试连接失败: " + e.getMessage());
+        } catch (Exception e) {
+            return Result.error("测试连接失败，请检查配置或稍后重试");
+        }
+    }
+
     @Operation(summary = "删除配置")
     @DeleteMapping("/{id}")
     public Result<Void> deleteConfig(@RequestAttribute Long userId, @PathVariable Long id) {

@@ -75,6 +75,10 @@ export const saveConfig = (config: LLMConfigRequest): Promise<ApiResult<LLMGloba
   return api.post('/api/llm-config', config);
 };
 
+export const testConnection = (config: Omit<LLMConfigRequest, 'configName'>): Promise<ApiResult<string>> => {
+  return api.post('/api/llm-config/test', config);
+};
+
 /**
  * 删除配置
  */

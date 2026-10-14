@@ -172,14 +172,14 @@ public class ChatClientFactory {
      * Spring AI 的 OpenAiApi 会自行拼接 /v1/chat/completions，
      * 这里统一将用户输入的 URL 归一化为服务根地址，兼容误填完整接口地址的情况。
      */
-    private String normalizeBaseUrl(String apiUrl) {
+    public String normalizeBaseUrl(String apiUrl) {
         String normalized = stripTrailingSlash(apiUrl == null ? "" : apiUrl.trim());
         normalized = stripSuffixIgnoreCase(normalized, CHAT_COMPLETIONS_SUFFIX);
         normalized = stripSuffixIgnoreCase(normalized, V1_SUFFIX);
         return stripTrailingSlash(normalized);
     }
 
-    private String normalizeAgentPlanBaseUrl(String apiUrl) {
+    public String normalizeAgentPlanBaseUrl(String apiUrl) {
         String normalized = stripTrailingSlash(apiUrl == null ? "" : apiUrl.trim());
         normalized = stripSuffixIgnoreCase(normalized, "/api/plan/v3/chat/completions");
         normalized = stripSuffixIgnoreCase(normalized, "/api/plan/v3");
@@ -235,7 +235,7 @@ public class ChatClientFactory {
         };
     }
 
-    private String normalizeModel(String provider, String model) {
+    public String normalizeModel(String provider, String model) {
         if (model == null) {
             return "";
         }
