@@ -1,11 +1,9 @@
 package com.agentflow.engine.executor.impl;
 
 import com.agentflow.engine.model.WorkflowNode;
-import com.agentflow.service.AgentPlanConfigResolver;
 import com.agentflow.service.KnowledgeBaseService;
-import com.agentflow.service.ResolvedAgentPlanConfig;
-import com.agentflow.service.VolcengineAgentPlanClient;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -13,36 +11,30 @@ import java.util.Map;
 @Component
 public class KnowledgeRetrieveNodeExecutor extends AbstractAgentPlanNodeExecutor {
 
-    private final AgentPlanConfigResolver configResolver;
-    private final VolcengineAgentPlanClient agentPlanClient;
     private final KnowledgeBaseService knowledgeBaseService;
 
-    public KnowledgeRetrieveNodeExecutor(AgentPlanConfigResolver configResolver,
-                                         VolcengineAgentPlanClient agentPlanClient,
-                                         KnowledgeBaseService knowledgeBaseService) {
-        this.configResolver = configResolver;
-        this.agentPlanClient = agentPlanClient;
+    public KnowledgeRetrieveNodeExecutor(KnowledgeBaseService knowledgeBaseService) {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
     @Override
     public Map<String, Object> execute(WorkflowNode node, Map<String, Object> input) throws Exception {
-        String query = textValue(node, input, "query", "input");
-        if (query == null) {
+        String query = node.getData().get("inputParams") instanceof List<?> params && !params.isEmpty()
+                ? configuredTextInput(node, input, "query")
+                : textValue(node, input, "query", "input");
+        if (!StringUtils.hasText(query)) {
             throw new IllegalArgumentException("检索知识库节点缺少 query");
         }
 
-        ResolvedAgentPlanConfig config = configResolver.resolve(node, "knowledge");
-        List<Double> embedding = List.of();
-        if (config.apiUrl() != null && config.apiKey() != null && config.model() != null) {
-            embedding = agentPlanClient.createEmbedding(config, query);
+        String knowledgeBaseId = stringData(node, "knowledgeBaseId", null);
+        if (knowledgeBaseId == null) {
+            throw new IllegalArgumentException("请选择要检索的知识库");
         }
 
-        Map<String, Object> output = knowledgeBaseService.retrieve(
+        Map<String, Object> output = knowledgeBaseService.searchRuntime(
                 node.getOwnerId(),
-                stringData(node, "knowledgeBaseId", "default"),
+                knowledgeBaseId,
                 query,
-                embedding,
                 intData(node, "topK", 5),
                 doubleData(node, "scoreThreshold", 0.2)
         );

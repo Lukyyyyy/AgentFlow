@@ -49,6 +49,7 @@ const NodePanel = ({ onDragStart }: NodePanelProps) => {
   const llmNodes = visibleNodeTypes.filter((node) => node.category === 'LLM');
   const toolNodes = visibleNodeTypes.filter((node) => node.category === 'TOOL');
   const controlNodes = visibleNodeTypes.filter((node) => node.category === 'CONTROL');
+  const knowledgeNodes = visibleNodeTypes.filter((node) => node.category === 'KNOWLEDGE');
 
   const getNodeTone = (node: NodeDefinition) => {
     if (node.nodeType === 'input') return 'node-library-green';
@@ -131,11 +132,24 @@ const NodePanel = ({ onDragStart }: NodePanelProps) => {
           },
         ]
       : []),
+    ...(knowledgeNodes.length > 0
+      ? [{
+          key: 'knowledge',
+          label: (
+            <div className="node-library-section-title">
+              <span>知识库节点</span>
+              <span className="node-library-count">{knowledgeNodes.length}</span>
+            </div>
+          ),
+          children: <div className="space-y-2">{knowledgeNodes.map(renderNodeItem)}</div>,
+        }]
+      : []),
   ].filter((item) => (
     !normalizedSearchTerm
     || (item.key === 'llm' && llmNodes.length > 0)
     || (item.key === 'tool' && toolNodes.length > 0)
     || (item.key === 'control' && controlNodes.length > 0)
+    || (item.key === 'knowledge' && knowledgeNodes.length > 0)
   ));
 
   return (
@@ -159,7 +173,7 @@ const NodePanel = ({ onDragStart }: NodePanelProps) => {
         ) : (
           <>
             <Collapse
-              defaultActiveKey={['llm', 'tool', 'control']}
+              defaultActiveKey={['llm', 'tool', 'control', 'knowledge']}
               ghost
               items={items}
               bordered={false}

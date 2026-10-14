@@ -606,6 +606,9 @@ const EditorPage = () => {
     if (nodeType === 'input') {
       return ['user_input'];
     }
+    if (nodeType === 'knowledge_retrieve') {
+      return getNodeOutputParams(nodeType);
+    }
 
     if (!Array.isArray(node.data?.outputParams)) {
       if (nodeType === 'image_generate' || nodeType === 'video_generate') {
@@ -1250,6 +1253,7 @@ const EditorPage = () => {
       ? selectedNode.data.inputParams as TtsInputParam[]
       : []
   );
+  const knowledgeQueryParam = getAgentPlanInputParams().find((param) => param.name === 'query');
   const getAgentPlanOutputParams = () => (
     Array.isArray(selectedNode?.data?.outputParams)
       ? selectedNode.data.outputParams as TtsOutputParam[]
@@ -1774,7 +1778,7 @@ const EditorPage = () => {
 	                      <Form.Item label="知识库">
 	                        <Select
 	                          value={llmConfig.knowledgeBaseId}
-	                          placeholder="选择知识库作为当前大模型节点的 RAG 上下文"
+	                          placeholder={isReActMode ? '选择模型可检索的知识库' : '选择生成前自动检索的知识库'}
 	                          allowClear
 	                          onChange={(value) => {
 	                            const selectedBase = knowledgeBases.find((base) => String(base.id) === value);
@@ -1790,7 +1794,9 @@ const EditorPage = () => {
 	                          }))}
 	                        />
 	                        <div className="workflow-field-hint">
-	                          知识库作为大模型节点的可选组件使用；可在顶部“知识库”中创建、导入文本并建立索引。
+	                          {isReActMode
+                            ? '模型通过知识检索工具获取资料，检索参数使用下方配置。'
+                            : '生成前自动检索。若已连接 RAG 节点并引用其 context，无需在这里重复选择知识库。'}
 	                        </div>
 	                      </Form.Item>
 	                      {llmConfig.knowledgeBaseId && (
@@ -2287,6 +2293,7 @@ const EditorPage = () => {
 	                {/* Agent Plan / Harness 节点配置 */}
 	                {isAgentPlanNode && (
 	                  <Form layout="vertical" className="workflow-config-form">
+                    {selectedNodeType !== 'knowledge_retrieve' && (
                     <Form.Item label={selectedNodeType === 'image_generate' ? '图片生成全局配置' : 'Agent Plan 全局配置'}>
                       <Select
                         value={(selectedNode.data?.configId as number) || undefined}
@@ -2326,8 +2333,9 @@ const EditorPage = () => {
                         ))}
 	                      </Select>
 	                    </Form.Item>
+                    )}
 
-                    {!selectedNode.data?.configId && (
+                    {selectedNodeType !== 'knowledge_retrieve' && !selectedNode.data?.configId && (
                       <>
                         {selectedNodeType === 'image_generate' && (
                           <Form.Item label="供应商">
@@ -2453,25 +2461,60 @@ const EditorPage = () => {
 	                    {['memory_retrieve', 'knowledge_retrieve'].includes(selectedNodeType) && (
 	                      <>
 	                        {selectedNodeType === 'knowledge_retrieve' && (
-	                          <Form.Item label="知识库">
+	                          <Form.Item label="知识库" required>
 	                            <Select
 	                              value={(selectedNode.data?.knowledgeBaseId as string) || undefined}
 	                              placeholder="选择要检索的知识库"
 	                              allowClear
-	                              onChange={(value) => updateSelectedNodeData({ knowledgeBaseId: value || 'default' })}
+	                              onChange={(value) => updateSelectedNodeData({
+                                knowledgeBaseId: value,
+                                knowledgeBaseName: knowledgeBases.find((base) => String(base.id) === value)?.name || ''
+                              })}
 	                              options={knowledgeBases.map((base) => ({
 	                                value: String(base.id),
 	                                label: `${base.name}（${base.documentCount || 0} 文档 / ${base.chunkCount || 0} 分片）`
 	                              }))}
 	                            />
+                            <div className="workflow-field-hint">
+                              使用知识库已配置的检索模型；请先在知识库页面导入资料并建立索引。
+                            </div>
 	                          </Form.Item>
 	                        )}
+                        {selectedNodeType === 'knowledge_retrieve' && (
+                          <Form.Item label="问题来源">
+                            <Select
+                              value={knowledgeQueryParam?.type === 'reference' ? 'reference' : 'input'}
+                              onChange={(value) => updateSelectedNodeData({
+                                inputParams: value === 'reference'
+                                  ? [{ name: 'query', type: 'reference', value: '' }]
+                                  : [],
+                                query: ''
+                              })}
+                              options={[
+                                { value: 'input', label: '固定问题（留空使用上游输入）' },
+                                { value: 'reference', label: '引用上游参数' }
+                              ]}
+                            />
+                          </Form.Item>
+                        )}
 	                        <Form.Item label="召回问题">
+                          {selectedNodeType === 'knowledge_retrieve' && knowledgeQueryParam?.type === 'reference' ? (
+                            <Select
+                              placeholder="先连接上游节点，再选择问题参数"
+                              value={knowledgeQueryParam.referenceNode}
+                              options={getReferenceableParams()}
+                              onChange={(value) => updateSelectedNodeData({
+                                inputParams: [{ name: 'query', type: 'reference', referenceNode: value, value: '' }]
+                              })}
+                            />
+                          ) : (
 	                          <Input.TextArea
 	                            rows={3}
+                            placeholder="留空时使用上游输入"
 	                            value={(selectedNode.data?.query as string) || ''}
 	                            onChange={(e) => updateSelectedNodeData({ query: e.target.value })}
 	                          />
+                          )}
 	                        </Form.Item>
 	                        <Form.Item label="TopK">
 	                          <Input
@@ -2479,9 +2522,29 @@ const EditorPage = () => {
 	                            min="1"
 	                            max="20"
 	                            value={(selectedNode.data?.topK as number) || 5}
-	                            onChange={(e) => updateSelectedNodeData({ topK: parseInt(e.target.value, 10) || 5 })}
+	                            onChange={(e) => updateSelectedNodeData({ topK: Math.min(20, Math.max(1, parseInt(e.target.value, 10) || 5)) })}
 	                          />
 	                        </Form.Item>
+                        {selectedNodeType === 'knowledge_retrieve' && (
+                          <>
+                            <Form.Item label="相关度阈值">
+                              <Input
+                                type="number"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={(selectedNode.data?.scoreThreshold as number) ?? 0.2}
+                                onChange={(e) => updateSelectedNodeData({
+                                  scoreThreshold: Math.min(1, Math.max(0, parseFloat(e.target.value) || 0))
+                                })}
+                              />
+                            </Form.Item>
+                            <div className="workflow-field-hint">
+                              输出 context（参考资料）、chunks（片段及来源）、citations（片段 ID）、output（与 context 相同）。
+                              连接大模型后，将 context 配置为大模型输入参数并在提示词中引用；同时连接输入节点以保留原始问题。
+                            </div>
+                          </>
+                        )}
 	                      </>
 	                    )}
 

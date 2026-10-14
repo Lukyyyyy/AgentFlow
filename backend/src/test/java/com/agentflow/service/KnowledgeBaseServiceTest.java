@@ -2,6 +2,7 @@ package com.agentflow.service;
 
 import com.agentflow.entity.KnowledgeBase;
 import com.agentflow.entity.KnowledgeChunk;
+import com.agentflow.common.ResourceNotFoundException;
 import com.agentflow.dto.KnowledgeBaseRequest;
 import com.agentflow.entity.LLMGlobalConfig;
 import com.agentflow.mapper.KnowledgeBaseMapper;
@@ -16,9 +17,12 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class KnowledgeBaseServiceTest {
 
@@ -39,6 +43,58 @@ class KnowledgeBaseServiceTest {
         assertEquals("text-embedding-v4", service.createKnowledgeBase(7L, request).get("embeddingModel"));
         request.setConfigId(null);
         assertEquals(null, service.createKnowledgeBase(7L, request).get("embeddingModel"));
+    }
+
+    @Test
+    void shouldUseKnowledgeBaseEmbeddingConfigurationForRuntimeSearch() throws Exception {
+        KnowledgeBaseMapper baseMapper = mock(KnowledgeBaseMapper.class);
+        KnowledgeChunkMapper chunkMapper = mock(KnowledgeChunkMapper.class);
+        AgentPlanConfigResolver resolver = mock(AgentPlanConfigResolver.class);
+        VolcengineAgentPlanClient client = mock(VolcengineAgentPlanClient.class);
+        KnowledgeBase base = new KnowledgeBase();
+        base.setId(3L);
+        base.setConfigId(9L);
+        base.setEmbeddingModel("knowledge-embedding");
+        when(baseMapper.selectOne(any())).thenReturn(base);
+        when(chunkMapper.selectList(any())).thenReturn(List.of());
+        ResolvedAgentPlanConfig config = new ResolvedAgentPlanConfig(
+                9L, "volcengine_agent_plan", "https://example.test", "test-key", "knowledge-embedding",
+                "knowledge-embedding", null, null, false);
+        when(resolver.resolveKnowledgeConfig(7L, 9L, "knowledge-embedding")).thenReturn(config);
+        when(client.createEmbedding(config, "问题")).thenReturn(List.of(1.0, 0.0));
+        KnowledgeBaseService service = new KnowledgeBaseService(baseMapper, mock(KnowledgeDocumentMapper.class),
+                chunkMapper, mock(KnowledgeIndexTaskMapper.class), resolver, client);
+
+        service.searchRuntime(7L, "3", "问题", 5, 0.2);
+
+        verify(client).createEmbedding(config, "问题");
+    }
+
+    @Test
+    void shouldRejectInvalidRuntimeSearchBeforeReadingChunks() {
+        KnowledgeChunkMapper chunks = mock(KnowledgeChunkMapper.class);
+        KnowledgeBaseService service = createService(chunks);
+
+        assertThrows(IllegalArgumentException.class, () -> service.searchRuntime(7L, "1", " ", 5, 0.2));
+        assertThrows(IllegalArgumentException.class, () -> service.searchRuntime(null, "1", "问题", 5, 0.2));
+        for (int topK : List.of(0, 21)) {
+            assertThrows(IllegalArgumentException.class, () -> service.searchRuntime(7L, "1", "问题", topK, 0.2));
+        }
+        for (double threshold : List.of(-0.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY)) {
+            assertThrows(IllegalArgumentException.class, () -> service.searchRuntime(7L, "1", "问题", 5, threshold));
+        }
+        verifyNoInteractions(chunks);
+    }
+
+    @Test
+    void shouldRejectInaccessibleKnowledgeBaseBeforeReadingChunks() {
+        KnowledgeChunkMapper chunks = mock(KnowledgeChunkMapper.class);
+        KnowledgeBaseService service = new KnowledgeBaseService(mock(KnowledgeBaseMapper.class),
+                mock(KnowledgeDocumentMapper.class), chunks, mock(KnowledgeIndexTaskMapper.class),
+                mock(AgentPlanConfigResolver.class), mock(VolcengineAgentPlanClient.class));
+
+        assertThrows(ResourceNotFoundException.class, () -> service.searchRuntime(7L, "3", "问题", 5, 0.2));
+        verifyNoInteractions(chunks);
     }
 
     @Test

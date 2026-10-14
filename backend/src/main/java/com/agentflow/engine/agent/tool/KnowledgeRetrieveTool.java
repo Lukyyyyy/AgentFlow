@@ -23,26 +23,24 @@ public class KnowledgeRetrieveTool implements AgentTool {
 
     @Override
     public String getDescription() {
-        return "从当前节点配置的知识库中检索与问题相关的项目资料、实现计划、字段和节点说明。";
+        return "从当前节点配置的知识库检索与问题相关的资料，返回参考片段和来源。";
     }
 
     @Override
     public String getInputSchema() {
-        return "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}";
+        return "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"],\"additionalProperties\":false}";
     }
 
     @Override
     public Map<String, Object> execute(Map<String, Object> arguments, AgentToolContext context) {
-        String query = String.valueOf(arguments.getOrDefault("query", ""));
+        String query = arguments.get("query") instanceof String text ? text.trim() : "";
         String knowledgeBaseId = firstText(
-                arguments.get("knowledgeBaseId"),
                 context.node().getData().get("knowledgeBaseId"),
                 "default"
         );
-        int topK = intArg(context.node().getData().get("knowledgeTopK"), arguments.get("topK"), 5);
+        int topK = intArg(context.node().getData().get("knowledgeTopK"), 5);
         double scoreThreshold = doubleArg(
                 context.node().getData().get("knowledgeScoreThreshold"),
-                arguments.get("scoreThreshold"),
                 0.2
         );
         return knowledgeBaseService.searchRuntime(
@@ -58,8 +56,7 @@ public class KnowledgeRetrieveTool implements AgentTool {
         return "";
     }
 
-    private int intArg(Object primary, Object fallback, int defaultValue) {
-        Object value = primary != null ? primary : fallback;
+    private int intArg(Object value, int defaultValue) {
         if (value instanceof Number number) {
             return number.intValue();
         }
@@ -73,8 +70,7 @@ public class KnowledgeRetrieveTool implements AgentTool {
         return defaultValue;
     }
 
-    private double doubleArg(Object primary, Object fallback, double defaultValue) {
-        Object value = primary != null ? primary : fallback;
+    private double doubleArg(Object value, double defaultValue) {
         if (value instanceof Number number) {
             return number.doubleValue();
         }

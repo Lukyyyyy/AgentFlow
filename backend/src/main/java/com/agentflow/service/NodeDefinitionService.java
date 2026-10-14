@@ -21,8 +21,7 @@ public class NodeDefinitionService extends ServiceImpl<NodeDefinitionMapper, Nod
             "vision_analyze",
             "memory_write",
             "memory_retrieve",
-            "knowledge_upsert",
-            "knowledge_retrieve"
+            "knowledge_upsert"
     );
     
     /**
@@ -52,10 +51,10 @@ public class NodeDefinitionService extends ServiceImpl<NodeDefinitionMapper, Nod
                 "{\"type\":\"object\",\"properties\":{\"configId\":{\"type\":\"number\"},\"knowledgeBaseId\":{\"type\":\"string\"},\"content\":{\"type\":\"string\"},\"sourceUrl\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"tags\":{\"type\":\"string\"}}}"
         ));
         nodeDefinitionMap.putIfAbsent("knowledge_retrieve", createNodeDefinition(
-                "knowledge_retrieve", "检索知识库", "KNOWLEDGE", "KR",
+                "knowledge_retrieve", "RAG 知识检索", "KNOWLEDGE", "KR",
                 "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}}}",
-                "{\"type\":\"object\",\"properties\":{\"chunks\":{\"type\":\"array\"},\"citations\":{\"type\":\"array\"},\"context\":{\"type\":\"string\"}}}",
-                "{\"type\":\"object\",\"properties\":{\"configId\":{\"type\":\"number\"},\"knowledgeBaseId\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"},\"topK\":{\"type\":\"number\",\"default\":5},\"scoreThreshold\":{\"type\":\"number\",\"default\":0.2}}}"
+                "{\"type\":\"object\",\"properties\":{\"chunks\":{\"type\":\"array\"},\"citations\":{\"type\":\"array\"},\"context\":{\"type\":\"string\"},\"output\":{\"type\":\"string\"}}}",
+                "{\"type\":\"object\",\"properties\":{\"knowledgeBaseId\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":20,\"default\":5},\"scoreThreshold\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1,\"default\":0.2}}}"
         ));
         nodeDefinitionMap.putIfAbsent("image_generate", createNodeDefinition(
                 "image_generate", "图片生成", "TOOL", "IMG",

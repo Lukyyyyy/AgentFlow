@@ -60,6 +60,12 @@ const WORKFLOW_EDGE_MARKER = {
 
 const getDefaultNodeData = (type: string) => {
   switch (type) {
+    case 'knowledge_retrieve':
+      return {
+        topK: 5,
+        scoreThreshold: 0.2,
+        outputParams: ['context', 'chunks', 'citations', 'output'].map((name) => ({ name, value: name })),
+      };
     case 'image_generate':
       return {
         inputParams: [{ name: 'prompt', type: 'reference', value: '' }],
@@ -86,6 +92,7 @@ const nodeMeta: Record<string, { icon: string; tone: string; caption: string }> 
   zhipu: { icon: 'ZP', tone: 'node-tone-blue', caption: 'ZhiPu' },
   ai_ping: { icon: 'AP', tone: 'node-tone-blue', caption: 'AIPing' },
   tts: { icon: 'TTS', tone: 'node-tone-amber', caption: '音频工具' },
+  knowledge_retrieve: { icon: 'RAG', tone: 'node-tone-green', caption: '知识检索' },
   condition: { icon: 'IF', tone: 'node-tone-orange', caption: '条件分支' },
 };
 

@@ -28,10 +28,24 @@ class KnowledgeRetrieveToolTest {
         when(knowledgeBaseService.searchRuntime(7L, "3", "联网搜索怎么做", 5, 0.2)).thenReturn(Map.of("chunks", Map.of()));
 
         tool.execute(
-                Map.of("query", "联网搜索怎么做", "topK", 1, "scoreThreshold", 0.7),
+                Map.of("query", "联网搜索怎么做", "knowledgeBaseId", "其他知识库", "topK", 1, "scoreThreshold", 0.7),
                 new AgentToolContext(node, Map.of("input", "联网搜索怎么做"))
         );
 
         verify(knowledgeBaseService).searchRuntime(7L, "3", "联网搜索怎么做", 5, 0.2);
+    }
+
+    @Test
+    void shouldIgnoreModelRetrievalSettingsWhenNodeUsesDefaults() {
+        KnowledgeBaseService service = mock(KnowledgeBaseService.class);
+        WorkflowNode node = new WorkflowNode();
+        node.setOwnerId(7L);
+        node.setData(Map.of("knowledgeBaseId", "3"));
+
+        new KnowledgeRetrieveTool(service).execute(
+                Map.of("query", "问题", "knowledgeBaseId", "4", "topK", 100, "scoreThreshold", -1),
+                new AgentToolContext(node, Map.of()));
+
+        verify(service).searchRuntime(7L, "3", "问题", 5, 0.2);
     }
 }

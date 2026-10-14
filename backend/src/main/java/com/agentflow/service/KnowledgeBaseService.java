@@ -242,6 +242,12 @@ public class KnowledgeBaseService {
     }
 
     public Map<String, Object> searchRuntime(Long ownerId, String knowledgeBaseId, String query, int topK, double scoreThreshold) {
+        if (ownerId == null || !StringUtils.hasText(query)) {
+            throw new IllegalArgumentException("检索需要用户身份和非空问题");
+        }
+        if (topK < 1 || topK > 20 || !Double.isFinite(scoreThreshold) || scoreThreshold < 0 || scoreThreshold > 1) {
+            throw new IllegalArgumentException("TopK 必须为 1–20，相关度阈值必须为 0–1");
+        }
         Long baseId = resolveBaseId(ownerId, knowledgeBaseId);
         KnowledgeBase base = requireBase(ownerId, baseId);
         List<Double> queryEmbedding = List.of();
