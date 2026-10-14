@@ -95,7 +95,7 @@ chmod +x start.sh
 ./start.sh
 ```
 
-脚本会在配置文件缺失时从示例创建本地配置、首次启动时安装前端依赖，并同时启动前后端服务。按 `Ctrl+C` 可一起停止两个服务。后端使用系统 Maven 启动。
+脚本会在配置文件缺失时从示例创建本地配置、首次启动时安装前端依赖。启动前会检查本机 MySQL、Redis 和 MinIO：MySQL 使用 Homebrew 服务或 `mysql.server` 启动，Redis 使用本地开发实例，已安装的 MinIO 使用 Homebrew 服务启动；外部 MySQL 不会启动本机服务。按 `Ctrl+C` 可一起停止前后端及脚本启动的 Redis；Homebrew 服务会继续运行。后端使用系统 Maven 启动。
 
 启动后访问：
 

@@ -34,6 +34,16 @@ copy_env_if_missing() {
   fi
 }
 
+config_value() {
+  local value
+  value="$(sed -n "s/^$1=//p" "${BACKEND_DIR}/.env" | tail -n 1)"
+  printf '%s' "${value%$'\r'}"
+}
+
+is_local_host() {
+  [[ "$1" == localhost || "$1" == 127.0.0.1 || "$1" == ::1 ]]
+}
+
 terminate_process_tree() {
   local pid="$1"
   local child_pid
@@ -116,6 +126,78 @@ start_local_redis_if_needed() {
   exit 1
 }
 
+mysql_is_ready() {
+  mysqladmin --no-defaults --protocol=tcp --host="${MYSQL_HOST}" --port="${MYSQL_PORT}" \
+    --connect-timeout=2 ping --silent >/dev/null 2>&1
+}
+
+start_local_mysql_if_needed() {
+  local attempt
+
+  if ! is_local_host "${MYSQL_HOST}"; then
+    info "使用外部 MySQL：${MYSQL_HOST}:${MYSQL_PORT}"
+    return
+  fi
+
+  require_command mysqladmin
+  if mysql_is_ready; then
+    info "MySQL 已就绪：${MYSQL_HOST}:${MYSQL_PORT}"
+    return
+  fi
+
+  info "MySQL 未就绪，正在启动本地服务……"
+  if command -v brew >/dev/null 2>&1 && brew list --versions mysql >/dev/null 2>&1; then
+    brew services start mysql
+  elif command -v mysql.server >/dev/null 2>&1; then
+    mysql.server start
+  else
+    error "未找到可启动的本地 MySQL，请安装 MySQL 或配置外部 MYSQL_HOST。"
+    exit 1
+  fi
+
+  for attempt in {1..30}; do
+    if mysql_is_ready; then
+      info "MySQL 已就绪：${MYSQL_HOST}:${MYSQL_PORT}"
+      return
+    fi
+    sleep 1
+  done
+
+  error "MySQL 启动后仍无法连接 ${MYSQL_HOST}:${MYSQL_PORT}，请检查服务日志和端口配置。"
+  exit 1
+}
+
+minio_is_ready() {
+  curl --silent --fail --max-time 2 "${MINIO_ENDPOINT%/}/minio/health/ready" >/dev/null
+}
+
+start_local_minio_if_needed() {
+  local endpoint_host attempt
+  endpoint_host="${MINIO_ENDPOINT#*://}"
+  endpoint_host="${endpoint_host%%[:/]*}"
+  if ! is_local_host "${endpoint_host}" || minio_is_ready; then
+    return
+  fi
+
+  if ! command -v brew >/dev/null 2>&1 || ! brew list --versions minio >/dev/null 2>&1; then
+    info "MinIO 未运行；需要对象存储时请安装并启动 MinIO。"
+    return
+  fi
+
+  info "MinIO 未就绪，正在启动本地服务……"
+  brew services start minio
+  for attempt in {1..30}; do
+    if minio_is_ready; then
+      info "MinIO 已就绪：${MINIO_ENDPOINT}"
+      return
+    fi
+    sleep 1
+  done
+
+  error "MinIO 启动后仍未就绪，请检查服务日志和 MINIO_ENDPOINT。"
+  exit 1
+}
+
 if [[ -x "${BACKEND_DIR}/mvnw" ]]; then
   MAVEN_COMMAND=("${BACKEND_DIR}/mvnw")
 elif command -v mvn >/dev/null 2>&1; then
@@ -128,7 +210,16 @@ fi
 copy_env_if_missing "${BACKEND_DIR}/.env" "${BACKEND_DIR}/.env.example"
 copy_env_if_missing "${FRONTEND_DIR}/.env.local" "${FRONTEND_DIR}/.env.example"
 
+MYSQL_HOST="${MYSQL_HOST:-$(config_value MYSQL_HOST)}"
+MYSQL_PORT="${MYSQL_PORT:-$(config_value MYSQL_PORT)}"
+MINIO_ENDPOINT="${MINIO_ENDPOINT:-$(config_value MINIO_ENDPOINT)}"
+MYSQL_HOST="${MYSQL_HOST:-localhost}"
+MYSQL_PORT="${MYSQL_PORT:-3306}"
+MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9000}"
+
+start_local_mysql_if_needed
 start_local_redis_if_needed
+start_local_minio_if_needed
 
 if [[ ! -d "${FRONTEND_DIR}/node_modules" ]]; then
   info "首次启动，正在安装前端依赖……"
