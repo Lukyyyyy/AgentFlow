@@ -18,4 +18,7 @@ public class WorkflowConfig {
      * 连线列表
      */
     private List<WorkflowEdge> edges;
+
+    /** LangGraph 单次运行允许执行的节点总次数（包含循环中的重复执行）。 */
+    private int maxSteps = 100;
 }

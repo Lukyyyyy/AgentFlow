@@ -3,6 +3,12 @@ import { Node } from '@xyflow/react';
 const REACT_FLOW_NODE_TYPE = 'workflow';
 const PROTECTED_WORKFLOW_NODE_TYPES = new Set(['input', 'output']);
 
+export const conditionOperators = [
+  ['eq', '等于'], ['neq', '不等于'], ['gt', '大于'], ['gte', '大于等于'],
+  ['lt', '小于'], ['lte', '小于等于'], ['contains', '包含'], ['notContains', '不包含'],
+  ['startsWith', '开头是'], ['endsWith', '结尾是'], ['isEmpty', '为空'], ['isNotEmpty', '非空'],
+].map(([value, label]) => ({ value, label }));
+
 export const isProtectedWorkflowNodeType = (nodeType: string) =>
   PROTECTED_WORKFLOW_NODE_TYPES.has(nodeType);
 

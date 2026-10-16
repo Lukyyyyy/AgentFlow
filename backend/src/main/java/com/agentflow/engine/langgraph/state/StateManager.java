@@ -127,6 +127,10 @@ public class StateManager {
     public java.util.List<Map<String, Object>> extractNodeResults(
             Map<String, Object> state, 
             com.agentflow.engine.model.WorkflowConfig config) {
+
+        if (state.get("nodeResults") instanceof java.util.List<?> results) {
+            return (java.util.List<Map<String, Object>>) results;
+        }
         
         java.util.List<Map<String, Object>> results = new java.util.ArrayList<>();
         

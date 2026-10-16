@@ -693,7 +693,7 @@ const DebugDrawer = ({ open, workflowId, totalNodeCount, onClose }: DebugDrawerP
               setExecutionResult({
                 executionId: activeExecutionId,
                 status: event.status as 'SUCCESS' | 'FAILED',
-                nodeResults: Array.from(tempNodeStatusMap.values()),
+                nodeResults: [...nodeResults],
                 outputData: event.data || {},
                 duration: parseInt(totalDuration),
                 errorMessage: event.status === 'FAILED' ? event.message : undefined
@@ -802,7 +802,7 @@ const DebugDrawer = ({ open, workflowId, totalNodeCount, onClose }: DebugDrawerP
     currentNodeResults.filter((r) => r.status === 'SUCCESS').length
   );
 
-  const renderNodeResultItem = (nodeResult: NodeResult) => {
+  const renderNodeResultItem = (nodeResult: NodeResult, index: number) => {
     let statusColor = 'default';
     let statusIcon = <LoadingOutlined />;
     
@@ -818,7 +818,7 @@ const DebugDrawer = ({ open, workflowId, totalNodeCount, onClose }: DebugDrawerP
     }
 
     return {
-      key: nodeResult.nodeId,
+      key: `${nodeResult.nodeId}-${index}`,
       label: (
         <div className="debug-node-collapse-label">
           <span className="debug-node-name">
@@ -948,7 +948,7 @@ const DebugDrawer = ({ open, workflowId, totalNodeCount, onClose }: DebugDrawerP
             </div>
             <Collapse
               items={currentNodeResults.map(renderNodeResultItem)}
-              defaultActiveKey={currentNodeResults.map((r) => r.nodeId)}
+              defaultActiveKey={currentNodeResults.map((r, index) => `${r.nodeId}-${index}`)}
               bordered={false}
               ghost
               className="debug-result-collapse"

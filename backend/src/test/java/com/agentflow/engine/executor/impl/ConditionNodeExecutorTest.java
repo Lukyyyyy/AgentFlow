@@ -13,6 +13,17 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ConditionNodeExecutorTest {
 
+    @Test
+    void resolvesFieldInsideLlmJsonOutput() throws Exception {
+        ConditionNodeExecutor executor = new ConditionNodeExecutor();
+        WorkflowNode node = createConditionNode(List.of(
+                createCondition("retry", "output.result.score", "lt", "80")));
+        assertEquals("retry", executor.execute(node, Map.of("output", "{\"result\":{\"score\":60}}"))
+                .get("__selectedBranch__"));
+        assertEquals("default", executor.execute(node, Map.of("output", "{\"result\":{\"score\":90}}"))
+                .get("__selectedBranch__"));
+    }
+
     private ConditionNodeExecutor executor;
 
     @BeforeEach

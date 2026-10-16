@@ -28,6 +28,14 @@ public class WorkflowConfigParser {
         WorkflowConfig config = new WorkflowConfig();
         config.setNodes(parseNodes(root.getJSONArray("nodes"), ownerId));
         config.setEdges(parseEdges(root.getJSONArray("edges")));
+        if (root.containsKey("maxSteps")) {
+            Object maxSteps = root.get("maxSteps");
+            if (!(maxSteps instanceof Number number) || number.doubleValue() != number.intValue()
+                    || number.intValue() < 1 || number.intValue() > 10000) {
+                throw new IllegalArgumentException("最大执行步数必须是 1 到 10000 的整数");
+            }
+            config.setMaxSteps(number.intValue());
+        }
         return config;
     }
 

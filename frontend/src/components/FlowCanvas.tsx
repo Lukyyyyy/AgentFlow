@@ -12,6 +12,7 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
+  useUpdateNodeInternals,
   OnNodesChange,
   OnEdgesChange,
   OnConnect,
@@ -134,6 +135,10 @@ const WorkflowNodeCard = ({ id, data, selected }: NodeProps<WorkflowCardNode>) =
   const isCondition = workflowType === 'condition';
   const conditions = Array.isArray(data.conditions) ? data.conditions : [];
   const handleCount = isCondition ? conditions.length + 1 : 0;
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, handleCount, updateNodeInternals]);
 
   return (
     <div className={`workflow-node ${selected ? 'is-selected' : ''}`}>
@@ -168,7 +173,7 @@ const WorkflowNodeCard = ({ id, data, selected }: NodeProps<WorkflowCardNode>) =
           <div className="workflow-node-subtitle">{modelLabel}</div>
         </div>
       </div>
-      {isCondition && conditions.length > 0 && (
+      {isCondition && (
         <div className="workflow-node-conditions">
           {conditions.map((c, i) => (
             <div key={c.id} className="workflow-node-condition-item">

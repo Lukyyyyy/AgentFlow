@@ -4,10 +4,20 @@ import com.agentflow.engine.model.WorkflowConfig;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class WorkflowConfigParserTest {
 
     private final WorkflowConfigParser parser = new WorkflowConfigParser();
+
+    @Test
+    void parseExecutionBudgetAndRejectInvalidValues() {
+        assertEquals(100, parser.parse("{}").getMaxSteps());
+        assertEquals(250, parser.parse("{\"maxSteps\":250}").getMaxSteps());
+        for (String value : new String[]{"0", "-1", "10001", "1.5", "null", "\"100\"", "true"}) {
+            assertThrows(IllegalArgumentException.class, () -> parser.parse("{\"maxSteps\":" + value + "}"));
+        }
+    }
 
     @Test
     void parseUsesDataTypeWhenReactFlowNodeTypeIsWorkflow() {

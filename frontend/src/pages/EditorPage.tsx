@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Button, Input, Form, message, Checkbox, Select, Modal, List, Popconfirm, Tooltip } from 'antd';
+import { Button, Input, InputNumber, Form, message, Checkbox, Select, Modal, List, Popconfirm, Tooltip } from 'antd';
 import { SaveOutlined, FolderOpenOutlined, BugOutlined, LogoutOutlined, PlusOutlined, DeleteOutlined, DatabaseOutlined, ApiOutlined, EditOutlined } from '@ant-design/icons';
 import { Edge, MarkerType, Node } from '@xyflow/react';
 import NodePanel from '../components/NodePanel';
@@ -23,7 +23,7 @@ import {
   isLlmNodeType,
   normalizeProviderKey,
 } from '../utils/provider';
-import { createDefaultWorkflowNodes, normalizeWorkflowNodes, serializeWorkflowNodes } from '../utils/workflowNode';
+import { conditionOperators, createDefaultWorkflowNodes, normalizeWorkflowNodes, serializeWorkflowNodes } from '../utils/workflowNode';
 import { useNavigate, useParams } from 'react-router-dom';
 
 interface OutputParam {
@@ -61,6 +61,14 @@ interface TtsOutputParam {
 interface WorkflowCanvasData {
   nodes?: Node[];
   edges?: Edge[];
+  maxSteps?: number;
+}
+
+interface BranchCondition {
+  id: string;
+  field: string;
+  operator: string;
+  value: string;
 }
 
 const normalizeAgentToolSelection = (tools: string[]) => {
@@ -121,6 +129,7 @@ const EditorPage = () => {
   const { nodes, edges, currentWorkflowId, setCurrentWorkflowId, selectedNode, setNodes, setEdges } = useWorkflowStore();
   const [workflowName, setWorkflowName] = useState('未命名工作流');
   const [engineType, setEngineType] = useState('dag');
+  const [workflowMaxSteps, setWorkflowMaxSteps] = useState(100);
   const [saving, setSaving] = useState(false);
   const [debugDrawerOpen, setDebugDrawerOpen] = useState(false);
   const [outputParams, setOutputParams] = useState<OutputParam[]>([]);
@@ -390,6 +399,7 @@ const EditorPage = () => {
         setCurrentWorkflowId(workflow.id);
         
         const flowData = JSON.parse(workflow.flowData) as WorkflowCanvasData;
+        setWorkflowMaxSteps(flowData.maxSteps ?? 100);
         console.log('加载的工作流数据:', flowData);
         
         // 加载节点
@@ -452,6 +462,7 @@ const EditorPage = () => {
     }
 
     const flowData = JSON.stringify({
+      maxSteps: workflowMaxSteps,
       nodes: serializeWorkflowNodes(nodes),
       edges: edges.map((edge) => ({
         id: edge.id,
@@ -735,6 +746,7 @@ const EditorPage = () => {
         setCurrentWorkflowId(null);
         setWorkflowName('未命名工作流');
         setEngineType('dag');
+        setWorkflowMaxSteps(100);
         setOutputParams([]);
         setResponseContent('');
         setNodes(createDefaultWorkflowNodes());
@@ -752,6 +764,8 @@ const EditorPage = () => {
   const handleCreateNew = () => {
     setCurrentWorkflowId(null);
     setWorkflowName('未命名工作流');
+    setEngineType('dag');
+    setWorkflowMaxSteps(100);
     
     // 创建默认的输入和输出节点(上下排列)
     setNodes(createDefaultWorkflowNodes());
@@ -1248,6 +1262,17 @@ const EditorPage = () => {
     useWorkflowStore.getState().updateNode(selectedNode.id, updatedData);
     useWorkflowStore.getState().setSelectedNode({ ...selectedNode, data: updatedData });
   };
+  const branchConditions = (Array.isArray(selectedNode?.data?.conditions)
+    ? selectedNode.data.conditions : []) as BranchCondition[];
+  const updateBranchCondition = (id: string, patch: Partial<BranchCondition>) => {
+    updateSelectedNodeData({
+      conditions: branchConditions.map(condition => condition.id === id ? { ...condition, ...patch } : condition),
+    });
+  };
+  const removeBranchCondition = (id: string) => {
+    updateSelectedNodeData({ conditions: branchConditions.filter(condition => condition.id !== id) });
+    setEdges(edges.filter(edge => edge.source !== selectedNode?.id || edge.sourceHandle !== id));
+  };
   const getAgentPlanInputParams = () => (
     Array.isArray(selectedNode?.data?.inputParams)
       ? selectedNode.data.inputParams as TtsInputParam[]
@@ -1316,6 +1341,22 @@ const EditorPage = () => {
               { value: 'langgraph', label: 'LangGraph 引擎' }
             ]}
           />
+          {engineType === 'langgraph' && (
+            <Tooltip title="单次运行的节点执行总次数，包含循环重复执行；超限后停止并报错">
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                步数上限
+                <InputNumber
+                  aria-label="最大执行步数"
+                  min={1}
+                  max={10000}
+                  precision={0}
+                  value={workflowMaxSteps}
+                  onChange={value => setWorkflowMaxSteps(value ?? 100)}
+                  style={{ width: 90 }}
+                />
+              </label>
+            </Tooltip>
+          )}
         </div>
         
         <div className="workflow-actions">
@@ -1414,6 +1455,65 @@ const EditorPage = () => {
                 </div>
               </div>
                 
+                {selectedNodeType === 'condition' && (
+                  <Form layout="vertical" className="workflow-config-form">
+                    <p className="text-sm text-gray-500 mb-4">
+                      按顺序执行首个命中的分支，未命中走默认出口；未连线的出口会结束流程。
+                      使用 LangGraph 引擎时，将分支连回前面的节点可形成循环。
+                    </p>
+                    {branchConditions.map((condition, index) => (
+                      <div className="workflow-config-section" key={condition.id}>
+                        <div className="workflow-config-section-header">
+                          <span>条件 {index + 1}</span>
+                          <Button
+                            size="small"
+                            danger
+                            aria-label={`删除条件 ${index + 1}`}
+                            icon={<DeleteOutlined />}
+                            onClick={() => removeBranchCondition(condition.id)}
+                          />
+                        </div>
+                        <Form.Item label="字段路径">
+                          <Input
+                            aria-label={`条件 ${index + 1} 字段路径`}
+                            placeholder="例如 score 或 output.score"
+                            value={condition.field}
+                            onChange={event => updateBranchCondition(condition.id, { field: event.target.value })}
+                          />
+                        </Form.Item>
+                        <Form.Item label="比较方式">
+                          <Select
+                            aria-label={`条件 ${index + 1} 比较方式`}
+                            options={conditionOperators}
+                            value={condition.operator}
+                            onChange={operator => updateBranchCondition(condition.id, { operator })}
+                          />
+                        </Form.Item>
+                        {!['isEmpty', 'isNotEmpty'].includes(condition.operator) && (
+                          <Form.Item label="比较值">
+                            <Input
+                              aria-label={`条件 ${index + 1} 比较值`}
+                              value={condition.value}
+                              onChange={event => updateBranchCondition(condition.id, { value: event.target.value })}
+                            />
+                          </Form.Item>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      block
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => updateSelectedNodeData({ conditions: [
+                        ...branchConditions, { id: `condition_${Date.now()}`, field: '', operator: 'eq', value: '' },
+                      ] })}
+                    >
+                      添加条件
+                    </Button>
+                    <p className="text-sm text-gray-500 mt-3">配置会同步到画布，完成后请保存工作流。</p>
+                  </Form>
+                )}
+
                 {/* 输入节点配置 */}
                 {selectedNode.data?.type === 'input' && (
                   <Form layout="vertical" className="workflow-config-form">
@@ -2913,6 +3013,7 @@ const EditorPage = () => {
 	                 selectedNode.data?.type !== 'output' &&
 	                 !isLlmNodeType(selectedNodeType) &&
 	                 selectedNode.data?.type !== 'tts' &&
+	                 selectedNodeType !== 'condition' &&
 	                 !isAgentPlanNode && (
                   <div className="workflow-config-empty">
                     该节点暂无可配置项

@@ -117,6 +117,13 @@ public class ConditionNodeExecutor implements NodeExecutor {
         Object current = map;
 
         for (String part : parts) {
+            if (current instanceof String text) {
+                try {
+                    current = JSON.parseObject(text);
+                } catch (Exception e) {
+                    return null;
+                }
+            }
             if (current instanceof Map) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> currentMap = (Map<String, Object>) current;

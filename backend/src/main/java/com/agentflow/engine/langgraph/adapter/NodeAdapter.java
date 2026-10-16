@@ -3,7 +3,7 @@ package com.agentflow.engine.langgraph.adapter;
 import com.agentflow.dto.ExecutionEvent;
 import com.agentflow.engine.executor.NodeExecutor;
 import com.agentflow.engine.executor.NodeExecutorFactory;
-import com.agentflow.engine.langgraph.WorkflowState;
+import com.alibaba.fastjson2.JSON;
 import com.agentflow.engine.model.WorkflowNode;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -37,6 +39,11 @@ public class NodeAdapter {
      * @return LangGraph AsyncNodeAction
      */
     public AsyncNodeAction<AgentState> adaptNode(WorkflowNode node, Consumer<ExecutionEvent> eventCallback) {
+        return adaptNode(node, eventCallback, 100);
+    }
+
+    public AsyncNodeAction<AgentState> adaptNode(
+            WorkflowNode node, Consumer<ExecutionEvent> eventCallback, int maxSteps) {
         
         return (AgentState state) -> {
             long startTime = System.currentTimeMillis();
@@ -45,6 +52,11 @@ public class NodeAdapter {
                 // 触发节点开始事件
                 if (eventCallback != null) {
                     eventCallback.accept(ExecutionEvent.nodeStart(node.getId(), node.getType()));
+                }
+
+                int steps = ((Number) state.data().getOrDefault("executionSteps", 0)).intValue();
+                if (steps >= maxSteps) {
+                    throw new IllegalStateException("超过最大执行步数 " + maxSteps + "，请检查循环退出条件");
                 }
                 
                 // 获取节点执行器
@@ -72,14 +84,16 @@ public class NodeAdapter {
                 
                 // 保存节点输出
                 @SuppressWarnings("unchecked")
-                Map<String, Map<String, Object>> nodeOutputs = 
-                    (Map<String, Map<String, Object>>) newStateData.getOrDefault("nodeOutputs", new HashMap<>());
+                Map<String, Map<String, Object>> nodeOutputs = new HashMap<>(
+                    (Map<String, Map<String, Object>>) newStateData.getOrDefault("nodeOutputs", Map.of()));
                 nodeOutputs.put(node.getId(), output);
                 newStateData.put("nodeOutputs", nodeOutputs);
                 
                 // 更新当前输入为本节点输出（传递给下一个节点）
                 newStateData.put("currentInput", output);
                 newStateData.put("currentNodeId", node.getId());
+                newStateData.put("executionSteps", steps + 1);
+                appendResult(newStateData, node, currentInput, output, null, startTime);
                 
                 // 触发节点成功事件
                 if (eventCallback != null) {
@@ -95,20 +109,39 @@ public class NodeAdapter {
                 
             } catch (Exception e) {
                 log.error("节点执行失败: {}", node.getId(), e);
+                String error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 
                 // 触发节点错误事件
                 if (eventCallback != null) {
-                    eventCallback.accept(ExecutionEvent.nodeError(node.getId(), node.getType(), e.getMessage()));
+                    eventCallback.accept(ExecutionEvent.nodeError(node.getId(), node.getType(), error));
                 }
                 
                 // 更新状态为失败
                 Map<String, Object> errorState = new HashMap<>(state.data());
                 errorState.put("status", "FAILED");
-                errorState.put("errorMessage", "节点 " + node.getId() + " 执行失败: " + e.getMessage());
+                errorState.put("errorMessage", "节点 " + node.getId() + " 执行失败: " + error);
+                appendResult(errorState, node, state.data().get("currentInput"), null, error, startTime);
                 
                 return CompletableFuture.completedFuture(errorState);
             }
         };
+    }
+
+    @SuppressWarnings("unchecked")
+    private void appendResult(Map<String, Object> state, WorkflowNode node, Object input,
+                              Object output, String error, long startTime) {
+        List<Map<String, Object>> results = new ArrayList<>(
+                (List<Map<String, Object>>) state.getOrDefault("nodeResults", List.of()));
+        Map<String, Object> result = new HashMap<>();
+        result.put("nodeId", node.getId());
+        result.put("nodeName", node.getType());
+        result.put("status", error == null ? "SUCCESS" : "FAILED");
+        result.put("input", JSON.toJSONString(input));
+        result.put("output", JSON.toJSONString(output));
+        result.put("error", error);
+        result.put("duration", (int) (System.currentTimeMillis() - startTime));
+        results.add(result);
+        state.put("nodeResults", results);
     }
     
     /**

@@ -143,12 +143,16 @@ public class LangGraphWorkflowEngine implements WorkflowExecutor {
                 nodeResult.setNodeName((String) nodeResultMap.get("nodeName"));
                 nodeResult.setStatus((String) nodeResultMap.get("status"));
                 nodeResult.setOutput((String) nodeResultMap.get("output"));
+                nodeResult.setInput((String) nodeResultMap.get("input"));
+                nodeResult.setDuration((Integer) nodeResultMap.get("duration"));
+                nodeResult.setError((String) nodeResultMap.get("error"));
                 nodeResults.add(nodeResult);
             }
             response.setNodeResults(nodeResults);
             
             response.setOutputData(outputDataJson);
             response.setDuration(duration);
+            response.setErrorMessage(errorMessage);
             
             log.info("工作流执行完成: status={}, duration={}ms", status, duration);
             return response;
@@ -185,6 +189,7 @@ public class LangGraphWorkflowEngine implements WorkflowExecutor {
             response.setNodeResults(new ArrayList<>());
             response.setOutputData(null);
             response.setDuration(duration);
+            response.setErrorMessage(errorMessage);
             
             return response;
         }

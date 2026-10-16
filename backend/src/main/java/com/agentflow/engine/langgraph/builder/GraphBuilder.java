@@ -5,151 +5,124 @@ import com.agentflow.engine.langgraph.adapter.NodeAdapter;
 import com.agentflow.engine.model.WorkflowConfig;
 import com.agentflow.engine.model.WorkflowEdge;
 import com.agentflow.engine.model.WorkflowNode;
-import lombok.extern.slf4j.Slf4j;
+import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.StateGraph;
 import org.bsc.langgraph4j.state.AgentState;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-/**
- * 图构建器
- * 
- * 将工作流配置转换为 LangGraph StateGraph
- * 负责节点注册、边添加、入口出口设置
- */
-@Slf4j
+/** 将工作流转换为支持条件路由与回边的状态图。 */
 @Component
 public class GraphBuilder {
-    
     @Autowired
     private NodeAdapter nodeAdapter;
-    
-    /**
-     * 构建 LangGraph StateGraph
-     * 
-     * @param config 工作流配置
-     * @param eventCallback 事件回调（可选）
-     * @return 编译后的 StateGraph
-     * @throws Exception 图构建异常
-     */
-    public org.bsc.langgraph4j.CompiledGraph<AgentState> buildGraph(
-            WorkflowConfig config, 
-            Consumer<ExecutionEvent> eventCallback) throws Exception {
-        
-        log.info("开始构建 LangGraph: 节点数={}, 边数={}", 
-            config.getNodes().size(), config.getEdges().size());
-        
-        // 创建 StateGraph
+
+    public CompiledGraph<AgentState> buildGraph(
+            WorkflowConfig config, Consumer<ExecutionEvent> eventCallback) throws Exception {
+        if (config.getNodes() == null || config.getNodes().isEmpty()) {
+            throw new IllegalArgumentException("工作流至少需要一个节点");
+        }
+        if (config.getMaxSteps() < 1 || config.getMaxSteps() > 10000) {
+            throw new IllegalArgumentException("最大执行步数必须是 1 到 10000 的整数");
+        }
+        Map<String, WorkflowNode> nodes = new LinkedHashMap<>();
+        Map<String, List<WorkflowEdge>> outgoing = new HashMap<>();
+        Set<String> incoming = new HashSet<>();
+        for (WorkflowNode node : config.getNodes()) {
+            String id = node.getId();
+            if (id == null || id.isBlank() || StateGraph.START.equals(id) || StateGraph.END.equals(id)
+                    || nodes.putIfAbsent(id, node) != null) {
+                throw new IllegalArgumentException("节点 ID 为空、重复或使用保留值: " + id);
+            }
+        }
+        for (WorkflowEdge edge : config.getEdges() == null ? List.<WorkflowEdge>of() : config.getEdges()) {
+            if (!nodes.containsKey(edge.getSource()) || !nodes.containsKey(edge.getTarget())) {
+                throw new IllegalArgumentException("连线引用了不存在的节点: " + edge.getId());
+            }
+            outgoing.computeIfAbsent(edge.getSource(), key -> new ArrayList<>()).add(edge);
+            incoming.add(edge.getTarget());
+        }
+
+        // 循环入口可能有回边，优先以明确的输入节点作为入口。
+        List<WorkflowNode> entries = nodes.values().stream().filter(n -> "input".equals(n.getType())).toList();
+        if (entries.isEmpty()) {
+            entries = nodes.values().stream().filter(n -> !incoming.contains(n.getId())).toList();
+        }
+        if (entries.size() != 1) {
+            throw new IllegalArgumentException("LangGraph 需要唯一入口，请保留一个输入节点");
+        }
+        String entryId = entries.get(0).getId();
+        Set<String> reachable = new HashSet<>();
+        Deque<String> pending = new ArrayDeque<>();
+        pending.add(entryId);
+        while (!pending.isEmpty()) {
+            String id = pending.removeFirst();
+            if (reachable.add(id)) {
+                outgoing.getOrDefault(id, List.of()).forEach(edge -> pending.addLast(edge.getTarget()));
+            }
+        }
+        if (reachable.size() != nodes.size()) {
+            throw new IllegalArgumentException("存在无法从入口到达的节点");
+        }
+
         StateGraph<AgentState> graph = new StateGraph<>(AgentState::new);
-        
-        // 添加所有节点
-        addNodes(graph, config.getNodes(), eventCallback);
-        
-        // 添加所有边
-        addEdges(graph, config.getEdges());
-        
-        // 设置入口和出口
-        setEntryAndExit(graph, config.getNodes(), config.getEdges());
-        
-        // 编译图
-        var compiled = graph.compile();
-        
-        log.info("LangGraph 构建完成");
+        for (WorkflowNode node : nodes.values()) {
+            graph.addNode(node.getId(), nodeAdapter.adaptNode(node, eventCallback, config.getMaxSteps()));
+        }
+        graph.addEdge(StateGraph.START, entryId);
+        for (WorkflowNode node : nodes.values()) {
+            List<WorkflowEdge> edges = outgoing.getOrDefault(node.getId(), List.of());
+            Map<String, String> branches = new HashMap<>();
+            boolean condition = "condition".equals(node.getType());
+            if (condition) {
+                branches.put("default", StateGraph.END);
+                Object configured = node.getData() == null ? null : node.getData().get("conditions");
+                if (configured != null && !(configured instanceof List<?>)) {
+                    throw new IllegalArgumentException("条件列表格式错误: " + node.getId());
+                }
+                for (Object item : configured == null ? List.of() : (List<?>) configured) {
+                    if (!(item instanceof Map<?, ?> rule) || !(rule.get("id") instanceof String id)
+                            || id.isBlank() || branches.putIfAbsent(id, StateGraph.END) != null) {
+                        throw new IllegalArgumentException("条件 ID 为空、重复或使用 default 保留值: " + node.getId());
+                    }
+                }
+                Set<String> connected = new HashSet<>();
+                for (WorkflowEdge edge : edges) {
+                    String handle = edge.getSourceHandle();
+                    if (!branches.containsKey(handle) || !connected.add(handle)) {
+                        throw new IllegalArgumentException("条件出口无效或重复连线: " + node.getId() + " / " + handle);
+                    }
+                    branches.put(handle, edge.getTarget());
+                }
+            } else if (edges.size() > 1) {
+                throw new IllegalArgumentException("普通节点只能连接一个后继，请使用条件分支节点: " + node.getId());
+            }
+            String next = edges.isEmpty() ? StateGraph.END : edges.get(0).getTarget();
+            Map<String, String> targets = new HashMap<>();
+            targets.put(StateGraph.END, StateGraph.END);
+            edges.forEach(edge -> targets.put(edge.getTarget(), edge.getTarget()));
+            graph.addConditionalEdges(node.getId(), state -> {
+                if ("FAILED".equals(state.data().get("status"))) {
+                    return CompletableFuture.completedFuture(StateGraph.END);
+                }
+                if (!condition) {
+                    return CompletableFuture.completedFuture(next);
+                }
+                Map<?, ?> output = (Map<?, ?>) state.data().get("currentInput");
+                String branch = (String) output.get("__selectedBranch__");
+                if (!branches.containsKey(branch)) {
+                    throw new IllegalStateException("条件返回未知分支: " + branch);
+                }
+                return CompletableFuture.completedFuture(branches.get(branch));
+            }, targets);
+        }
+        CompiledGraph<AgentState> compiled = graph.compile();
+        // 库达到迭代上限会静默结束；让节点适配器先报出明确的步数超限错误。
+        compiled.setMaxIterations(config.getMaxSteps() + 4);
         return compiled;
-    }
-    
-    /**
-     * 添加节点到图中
-     */
-    private void addNodes(
-            StateGraph<AgentState> graph, 
-            List<WorkflowNode> nodes,
-            Consumer<ExecutionEvent> eventCallback) throws Exception {
-        
-        for (WorkflowNode node : nodes) {
-            log.debug("添加节点: id={}, type={}", node.getId(), node.getType());
-            
-            // 使用 NodeAdapter 将节点适配为 LangGraph NodeAction
-            var nodeAction = nodeAdapter.adaptNode(node, eventCallback);
-            
-            graph.addNode(node.getId(), nodeAction);
-        }
-    }
-    
-    /**
-     * 添加边到图中
-     */
-    private void addEdges(StateGraph<AgentState> graph, List<WorkflowEdge> edges) throws Exception {
-        for (WorkflowEdge edge : edges) {
-            log.debug("添加边: {} -> {}", edge.getSource(), edge.getTarget());
-            graph.addEdge(edge.getSource(), edge.getTarget());
-        }
-    }
-    
-    /**
-     * 设置图的入口和出口节点
-     */
-    private void setEntryAndExit(
-            StateGraph<AgentState> graph,
-            List<WorkflowNode> nodes,
-            List<WorkflowEdge> edges) throws Exception {
-        
-        // 找到入口节点（没有前置节点的节点）
-        WorkflowNode entryNode = findEntryNode(nodes, edges);
-        if (entryNode != null) {
-            log.info("设置入口节点: {}", entryNode.getId());
-            graph.addEdge(StateGraph.START, entryNode.getId());
-        } else {
-            log.warn("未找到入口节点，使用第一个节点作为入口");
-            if (!nodes.isEmpty()) {
-                graph.addEdge(StateGraph.START, nodes.get(0).getId());
-            }
-        }
-        
-        // 找到出口节点（没有后继节点的节点）
-        WorkflowNode exitNode = findExitNode(nodes, edges);
-        if (exitNode != null) {
-            log.info("设置出口节点: {}", exitNode.getId());
-            graph.addEdge(exitNode.getId(), StateGraph.END);
-        } else {
-            log.warn("未找到出口节点，使用最后一个节点作为出口");
-            if (!nodes.isEmpty()) {
-                graph.addEdge(nodes.get(nodes.size() - 1).getId(), StateGraph.END);
-            }
-        }
-    }
-    
-    /**
-     * 查找入口节点（没有前置节点）
-     */
-    private WorkflowNode findEntryNode(List<WorkflowNode> nodes, List<WorkflowEdge> edges) {
-        for (WorkflowNode node : nodes) {
-            boolean hasIncomingEdge = edges.stream()
-                .anyMatch(edge -> edge.getTarget().equals(node.getId()));
-            
-            if (!hasIncomingEdge) {
-                return node;
-            }
-        }
-        return null;
-    }
-    
-    /**
-     * 查找出口节点（没有后继节点）
-     */
-    private WorkflowNode findExitNode(List<WorkflowNode> nodes, List<WorkflowEdge> edges) {
-        for (WorkflowNode node : nodes) {
-            boolean hasOutgoingEdge = edges.stream()
-                .anyMatch(edge -> edge.getSource().equals(node.getId()));
-            
-            if (!hasOutgoingEdge) {
-                return node;
-            }
-        }
-        return null;
     }
 }
