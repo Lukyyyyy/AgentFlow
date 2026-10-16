@@ -1434,7 +1434,7 @@ const EditorPage = () => {
 
         {/* 中间画布 */}
         <main className="workflow-canvas-panel">
-          <FlowCanvas onNodeClick={handleNodeClick} />
+          <FlowCanvas onNodeClick={handleNodeClick} engineType={engineType} />
         </main>
 
         {/* 右侧配置面板 */}

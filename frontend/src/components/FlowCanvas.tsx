@@ -1,11 +1,13 @@
-import { useCallback, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
+  Panel,
   Node,
   NodeProps,
+  Edge,
   Connection,
   Handle,
   Position,
@@ -13,6 +15,7 @@ import {
   useNodesState,
   useEdgesState,
   useUpdateNodeInternals,
+  useInternalNode,
   OnNodesChange,
   OnEdgesChange,
   OnConnect,
@@ -24,10 +27,12 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useWorkflowStore } from '../store/workflowStore';
-import { isProtectedWorkflowNodeType } from '../utils/workflowNode';
+import { conditionOperators, isProtectedWorkflowNodeType } from '../utils/workflowNode';
+import { getLoopEdgeIds } from '../utils/workflowLoop';
 
 interface FlowCanvasProps {
   onNodeClick: (node: Node) => void;
+  engineType: string;
 }
 
 type WorkflowNodeData = {
@@ -47,6 +52,16 @@ type WorkflowNodeData = {
 };
 
 type WorkflowCardNode = Node<WorkflowNodeData, 'workflow'>;
+
+type WorkflowCanvasEdge = Edge<{
+  loopBack: boolean;
+  loopExit: boolean;
+  targetLabel: string;
+  caption: string;
+  lane: number;
+}>;
+
+const WorkflowEdgesContext = createContext<WorkflowCanvasEdge[]>([]);
 
 const WORKFLOW_EDGE_STYLE = {
   stroke: '#6f86d8',
@@ -124,8 +139,8 @@ const WorkflowNodeCard = ({ id, data, selected }: NodeProps<WorkflowCardNode>) =
   const workflowType = data.type || '';
   const isProtected = isProtectedWorkflowNodeType(workflowType);
   const meta = getNodeMeta(workflowType);
-  const inputCount = Array.isArray(data.inputParams) ? data.inputParams.length : 0;
-  const outputCount = Array.isArray(data.outputParams) ? data.outputParams.length : 0;
+  const inputCount = useWorkflowStore((state) => state.edges.filter((edge) => edge.target === id).length);
+  const outputCount = useWorkflowStore((state) => state.edges.filter((edge) => edge.source === id).length);
   const modelLabel = data.model || data.provider || data.skillName || meta.caption;
   const tools = Array.isArray(data.tools) ? data.tools : [];
   const toolLabels = getToolLabels(tools);
@@ -133,12 +148,15 @@ const WorkflowNodeCard = ({ id, data, selected }: NodeProps<WorkflowCardNode>) =
   const knowledgeBaseLabel = getKnowledgeBaseLabel(data);
 
   const isCondition = workflowType === 'condition';
+  const visualEdges = useContext(WorkflowEdgesContext);
+  const outgoing = visualEdges.filter((edge) => edge.source === id);
+  const isLoopCondition = isCondition && outgoing.some((edge) => edge.data?.loopBack);
   const conditions = Array.isArray(data.conditions) ? data.conditions : [];
   const handleCount = isCondition ? conditions.length + 1 : 0;
   const updateNodeInternals = useUpdateNodeInternals();
   useEffect(() => {
     updateNodeInternals(id);
-  }, [id, handleCount, updateNodeInternals]);
+  }, [id, handleCount, outputCount, updateNodeInternals]);
 
   return (
     <div className={`workflow-node ${selected ? 'is-selected' : ''}`}>
@@ -170,21 +188,46 @@ const WorkflowNodeCard = ({ id, data, selected }: NodeProps<WorkflowCardNode>) =
         <div className={`workflow-node-icon ${meta.tone}`}>{meta.icon}</div>
         <div className="workflow-node-title-wrap">
           <div className="workflow-node-title">{data.label || workflowType || '未命名节点'}</div>
-          <div className="workflow-node-subtitle">{modelLabel}</div>
+          <div className={`workflow-node-subtitle ${isLoopCondition ? 'workflow-loop-caption' : ''}`}>
+            {isLoopCondition ? '↻ 循环判断' : modelLabel}
+          </div>
         </div>
       </div>
       {isCondition && (
         <div className="workflow-node-conditions">
-          {conditions.map((c, i) => (
-            <div key={c.id} className="workflow-node-condition-item">
-              <span className="condition-badge">{i + 1}</span>
-              <span className="condition-label">{c.field} {c.operator} {c.value}</span>
-            </div>
-          ))}
-          <div className="workflow-node-condition-item condition-default">
-            <span className="condition-badge default">D</span>
-            <span className="condition-label">否则(默认)</span>
-          </div>
+          {[...conditions, { id: 'default', field: '', operator: '', value: '' }].map((condition, index) => {
+            const connections = outgoing.filter((edge) => edge.sourceHandle === condition.id);
+            const operator = conditionOperators.find((option) => option.value === condition.operator)?.label || condition.operator || '';
+            const label = condition.id === 'default' ? '否则（默认）'
+              : `条件 ${index + 1}：${condition.field || '待配置'} ${operator} ${condition.value || ''}`;
+            return (
+              <div key={condition.id} className="workflow-condition-branch">
+                <div className="workflow-node-condition-item">
+                  <span className={`condition-badge ${condition.id === 'default' ? 'default' : ''}`}>
+                    {condition.id === 'default' ? 'D' : index + 1}
+                  </span>
+                  <span className="condition-label" title={label}>{label}</span>
+                </div>
+                {connections.length ? connections.map((edge) => (
+                  <div key={edge.id} className={`workflow-branch-target ${edge.data?.loopBack ? 'is-loop' : edge.data?.loopExit ? 'is-exit' : ''}`} title={edge.data?.caption}>
+                    {edge.data?.loopBack ? '↻ 循环返回 · ' : edge.data?.loopExit ? '→ 退出循环 · ' : '→ '}{edge.data?.targetLabel}
+                  </div>
+                )) : <div className="workflow-branch-target">未连接</div>}
+                {connections.length > 1 && <div className="workflow-branch-warning">此出口有多条连线，请拆分条件</div>}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={condition.id}
+                  className={`workflow-node-handle condition-handle ${connections.some((edge) => edge.data?.loopBack) ? 'is-loop' : connections.some((edge) => edge.data?.loopExit) ? 'is-exit' : ''}`}
+                  title={`${label}：拖动连接到目标节点`}
+                  aria-label={`${label}出口`}
+                />
+              </div>
+            );
+          })}
+          {outgoing.some((edge) => edge.data?.caption.includes('未绑定条件')) && (
+            <div className="workflow-branch-warning">有连线未绑定条件出口，请重新连接</div>
+          )}
         </div>
       )}
       {(isReActMode || knowledgeBaseLabel) && (
@@ -211,29 +254,9 @@ const WorkflowNodeCard = ({ id, data, selected }: NodeProps<WorkflowCardNode>) =
       )}
       <div className="workflow-node-footer">
         <span>{workflowType || 'node'}</span>
-        <span>{inputCount} 入 / {outputCount} 出</span>
+        <span title="当前节点的入向连线数 / 出向连线数">{inputCount} 入 / {outputCount} 出</span>
       </div>
-      {workflowType === 'output' ? null : isCondition ? (
-        <>
-          {conditions.map((c, i) => (
-            <Handle
-              key={c.id}
-              type="source"
-              position={Position.Bottom}
-              id={c.id}
-              className="workflow-node-handle condition-handle"
-              style={{ left: `${((i + 1) / (handleCount + 1)) * 100}%` }}
-            />
-          ))}
-          <Handle
-            type="source"
-            position={Position.Bottom}
-            id="default"
-            className="workflow-node-handle condition-handle"
-            style={{ left: `${(handleCount / (handleCount + 1)) * 100}%` }}
-          />
-        </>
-      ) : (
+      {workflowType !== 'output' && !isCondition && (
         <Handle
           type="source"
           position={Position.Bottom}
@@ -250,6 +273,9 @@ const nodeTypes = {
 
 const WorkflowEdgeLine = ({
   id,
+  source,
+  target,
+  data,
   sourceX,
   sourceY,
   targetX,
@@ -259,9 +285,11 @@ const WorkflowEdgeLine = ({
   markerEnd,
   style,
   selected,
-}: EdgeProps) => {
+}: EdgeProps<WorkflowCanvasEdge>) => {
   const deleteEdge = useWorkflowStore((state) => state.deleteEdge);
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+  let [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
@@ -269,6 +297,15 @@ const WorkflowEdgeLine = ({
     sourcePosition,
     targetPosition,
   });
+  if (data?.loopBack) {
+    const right = (targetNode?.internals.positionAbsolute.x ?? targetX) + (targetNode?.measured.width ?? 236);
+    const laneX = Math.max(sourceX, right) + 72 + data.lane * 28;
+    const startY = sourcePosition === Position.Bottom ? sourceY + 28 : sourceY;
+    const topY = Math.min(targetY, sourceNode?.internals.positionAbsolute.y ?? sourceY) - 36;
+    edgePath = `M ${sourceX} ${sourceY} L ${sourceX} ${startY} L ${laneX} ${startY} L ${laneX} ${topY} L ${targetX} ${topY} L ${targetX} ${targetY}`;
+    labelX = laneX;
+    labelY = (startY + topY) / 2;
+  }
 
   return (
     <>
@@ -279,12 +316,22 @@ const WorkflowEdgeLine = ({
         style={style}
         interactionWidth={24}
       />
-      {selected && (
+      {(data?.caption || selected) && (
         <EdgeLabelRenderer>
+          {data?.caption && (
+            <div
+              className={`workflow-edge-caption ${data.loopBack ? 'is-loop' : data.loopExit ? 'is-exit' : ''}`}
+              style={{ transform: `translate(${data.loopBack ? '12px' : '-50%'}, -50%) translate(${labelX}px, ${labelY}px)` }}
+              title={data.caption}
+            >
+              {data.caption}
+            </div>
+          )}
+          {selected && (
           <button
             type="button"
             className="workflow-edge-delete nodrag nopan"
-            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - (data?.caption ? 28 : 0)}px)` }}
             aria-label="取消节点连接"
             title="取消连接"
             onPointerDown={(event) => event.stopPropagation()}
@@ -297,6 +344,7 @@ const WorkflowEdgeLine = ({
               <path d="m7 7 10 10M17 7 7 17" />
             </svg>
           </button>
+          )}
         </EdgeLabelRenderer>
       )}
     </>
@@ -310,7 +358,7 @@ const edgeTypes = {
 /**
  * 中间画布组件
  */
-const FlowCanvas = ({ onNodeClick }: FlowCanvasProps) => {
+const FlowCanvas = ({ onNodeClick, engineType }: FlowCanvasProps) => {
   const {
     nodes: storeNodes,
     edges: storeEdges,
@@ -321,6 +369,35 @@ const FlowCanvas = ({ onNodeClick }: FlowCanvasProps) => {
   
   const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges);
+  const loopEdgeIds = useMemo(() => getLoopEdgeIds(edges), [edges]);
+  const visualEdges = useMemo<WorkflowCanvasEdge[]>(() => {
+    const nodeById = new Map(storeNodes.map((node) => [node.id, node]));
+    const loopConditions = new Set(edges.filter((edge) => loopEdgeIds.has(edge.id)
+      && nodeById.get(edge.source)?.data.type === 'condition').map((edge) => edge.source));
+    let lane = 0;
+    return edges.map((edge) => {
+      const source = nodeById.get(edge.source);
+      const target = nodeById.get(edge.target);
+      const inLoop = loopEdgeIds.has(edge.id);
+      const isCondition = source?.data.type === 'condition';
+      const loopBack = inLoop && (isCondition || edge.source === edge.target);
+      const loopExit = loopConditions.has(edge.source) && !inLoop;
+      const conditions = (Array.isArray(source?.data.conditions) ? source.data.conditions : []) as WorkflowNodeData['conditions'];
+      const branchIndex = conditions?.findIndex((condition) => condition.id === edge.sourceHandle) ?? -1;
+      const branchLabel = isCondition ? edge.sourceHandle === 'default' ? '否则' : branchIndex >= 0 ? `条件 ${branchIndex + 1}` : '未绑定条件' : '';
+      const targetLabel = String(target?.data.label || edge.target);
+      const caption = loopBack ? `↻ 循环返回 · ${branchLabel ? `${branchLabel} → ` : ''}${targetLabel}`
+        : loopExit ? `退出循环 · ${branchLabel} → ${targetLabel}` : branchLabel;
+      const color = inLoop ? '#7c3aed' : loopExit ? '#16845b' : WORKFLOW_EDGE_STYLE.stroke;
+      return {
+        ...edge,
+        type: 'workflow',
+        style: { ...WORKFLOW_EDGE_STYLE, stroke: color, strokeWidth: inLoop ? 2.5 : 2, strokeDasharray: loopBack ? '7 5' : undefined },
+        markerEnd: { ...WORKFLOW_EDGE_MARKER, color },
+        data: { ...edge.data, loopBack, loopExit, targetLabel, caption, lane: loopBack ? lane++ : 0 },
+      };
+    });
+  }, [edges, storeNodes, loopEdgeIds]);
 
   // 当 store 中的 nodes/edges 变化时，同步更新到本地状态
   useEffect(() => {
@@ -330,13 +407,7 @@ const FlowCanvas = ({ onNodeClick }: FlowCanvasProps) => {
 
   useEffect(() => {
     console.log('Store edges changed:', storeEdges);
-    const edgesWithMarkers = storeEdges.map(edge => ({
-      ...edge,
-      type: 'workflow',
-      style: WORKFLOW_EDGE_STYLE,
-      markerEnd: WORKFLOW_EDGE_MARKER,
-    }));
-    setEdges(edgesWithMarkers);
+    setEdges(storeEdges);
   }, [storeEdges, setEdges]);
 
   // 同步到 store
@@ -427,10 +498,11 @@ const FlowCanvas = ({ onNodeClick }: FlowCanvasProps) => {
   }, [deleteNode]);
 
   return (
+    <WorkflowEdgesContext.Provider value={visualEdges}>
     <div className="h-full w-full">
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={visualEdges}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
@@ -451,6 +523,14 @@ const FlowCanvas = ({ onNodeClick }: FlowCanvasProps) => {
         snapToGrid
         snapGrid={[16, 16]}
       >
+        {loopEdgeIds.size > 0 && (
+          <Panel position="top-left" className="workflow-loop-legend">
+            <strong>↻ 循环路径</strong>
+            <span className="workflow-loop-caption">紫色实线：循环体 · 虚线：循环返回</span>
+            <span className="workflow-exit-caption">绿色连线：退出循环</span>
+            {engineType === 'dag' && <span className="workflow-branch-warning">运行循环请切换至 LangGraph 引擎</span>}
+          </Panel>
+        )}
         <Background color="#d4dce8" gap={20} size={1.25} />
         <Controls className="workflow-controls" />
         <MiniMap
@@ -462,6 +542,7 @@ const FlowCanvas = ({ onNodeClick }: FlowCanvasProps) => {
         />
       </ReactFlow>
     </div>
+    </WorkflowEdgesContext.Provider>
   );
 };
 
